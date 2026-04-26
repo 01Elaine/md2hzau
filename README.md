@@ -67,7 +67,7 @@ your-thesis/
 ├── figures/          ← 图片放这里
 │   ├── fig1.png
 │   └── ...
-└── HZAUtex-master/
+└── HZAUtex/
     └── HZAUthesis/
         └── HZAUthesis.tex   ← --template 指向此文件
 ```
@@ -76,14 +76,14 @@ your-thesis/
 
 ```powershell
 python md2hzau.py 论文.md `
-    --template path/to/HZAUtex/HZAUthesis/HZAUthesis.tex `
+    --template HZAUtex/HZAUthesis/HZAUthesis.tex `
     --img-prefix "./figures/"
 ```
 
 ### 第四步：编译 PDF
 
 ```powershell
-cd path/to/HZAUtex/HZAUthesis
+cd HZAUtex/HZAUthesis
 xelatex 论文_hzau.tex
 xelatex 论文_hzau.tex   # 第二次编译修正交叉引用
 ```
