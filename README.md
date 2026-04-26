@@ -55,7 +55,7 @@ Abstract text...
 
 ### 第二步：获取 HZAUtex 模板
 
-```bash
+```powershell
 git clone https://gitee.com/wagaaa/HZAUtex
 ```
 
@@ -74,15 +74,15 @@ your-thesis/
 
 ### 第三步：运行转换
 
-```bash
-python md2hzau.py 论文.md \
-    --template path/to/HZAUtex/HZAUthesis/HZAUthesis.tex \
+```powershell
+python md2hzau.py 论文.md `
+    --template path/to/HZAUtex/HZAUthesis/HZAUthesis.tex `
     --img-prefix "./figures/"
 ```
 
 ### 第四步：编译 PDF
 
-```bash
+```powershell
 cd path/to/HZAUtex/HZAUthesis
 xelatex 论文_hzau.tex
 xelatex 论文_hzau.tex   # 第二次编译修正交叉引用
