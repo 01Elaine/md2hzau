@@ -51,12 +51,25 @@ Abstract text...
 致谢内容...
 ```
 
-完整示例见 [`example/example.md`](example/example.md)。
+完整示例见 [`example.md`](example.md)。
 
 ### 第二步：获取 HZAUtex 模板
 
 ```bash
 git clone https://gitee.com/wagaaa/HZAUtex
+```
+
+此时目录结构应如下：
+
+```
+your-thesis/
+├── 论文.md            ← 你的论文 Markdown 文件（格式参考根目录的 example.md）
+├── figures/          ← 图片放这里
+│   ├── fig1.png
+│   └── ...
+└── HZAUtex-master/
+    └── HZAUthesis/
+        └── HZAUthesis.tex   ← --template 指向此文件
 ```
 
 ### 第三步：运行转换
