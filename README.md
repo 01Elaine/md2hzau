@@ -53,39 +53,41 @@ Abstract text...
 
 完整示例见 [`example.md`](example.md)。
 
-### 第二步：获取 HZAUtex 模板
+### 第二步：克隆本仓库（已内含 HZAUtex 模板）
 
 ```powershell
-git clone https://gitee.com/wagaaa/HZAUtex
+git clone https://github.com/01Elaine/md2hzau
+cd md2hzau
 ```
 
-此时目录结构应如下：
+仓库结构如下，克隆后即可直接使用：
 
 ```
-your-thesis/
-├── 论文.md            ← 你的论文 Markdown 文件（格式参考根目录的 example.md）
-├── figures/          ← 图片放这里
-│   ├── fig1.png
-│   └── ...
-└── HZAUtex/
-    └── HZAUthesis/
-        └── HZAUthesis.tex   ← --template 指向此文件
+md2hzau/
+├── example.md        ← 完整示例论文
+├── figures/          ← 示例图片
+├── HZAUtex/          ← HZAUtex 模板（已内置）
+│   └── HZAUthesis/
+│       └── HZAUthesis.tex
+└── md2hzau.py
 ```
 
 ### 第三步：运行转换
 
 ```powershell
-python md2hzau.py 论文.md `
+python md2hzau.py example.md `
     --template HZAUtex/HZAUthesis/HZAUthesis.tex `
-    --img-prefix "./figures/"
+    --img-prefix "../../figures/"
 ```
 
 ### 第四步：编译 PDF
 
+转换后的 `.tex` 文件自动生成在 `HZAUtex/HZAUthesis/` 目录下：
+
 ```powershell
 cd HZAUtex/HZAUthesis
-xelatex -interaction=nonstopmode 论文_hzau.tex
-xelatex -interaction=nonstopmode 论文_hzau.tex   # 第二次编译修正交叉引用
+xelatex -interaction=nonstopmode example_hzau.tex
+xelatex -interaction=nonstopmode example_hzau.tex   # 第二次编译修正交叉引用
 ```
 
 ---
