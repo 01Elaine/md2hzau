@@ -1,6 +1,6 @@
 # md2hzau
 
-**核心宗旨：写好一个 MD 文件，运行一条命令，直接得到毕业论文 PDF，不需要再做任何其他修改。**
+**写好一个 MD 文件，运行一条命令，直接得到毕业论文 PDF。**
 
 将 Markdown 论文一键转换为[华中农业大学本科毕业论文 LaTeX 模板（HZAUtex）](https://gitee.com/wagaaa/HZAUtex)格式。
 
@@ -171,7 +171,11 @@ $$
 | 问题 | 修复方式 |
 |------|----------|
 | Abstract 英文字体显示像等宽体 | `\setmainfont{SimSun}` → `\setmainfont{Times New Roman}` |
-| 目录前有空白 III 页 | 去掉 `enabstract` 末尾 `\clearpage`，禁用 `\sectionbreak`，重写 tocloft 目录标题命令 |
+| 目录只显示一页（75条目录截断） | 禁用 `tocloft`（与模板内置的 `titletoc` 冲突，产生1000pt不可分页大框） |
+| 目录前有空白 III 页 | 去掉 `enabstract` 末尾 `\clearpage`，禁用 `\sectionbreak` |
+| 正文页码重置时机错误 | 页码重置放在第一个 `\section` 前，而非 `\tableofcontents` 后 |
+| 宽表格超出页面 | `tabular` + `adjustbox{max width=\linewidth}` 自动缩小 |
+| `&emsp;` 变成 `\&emsp;` 双反斜杠 | HTML 实体在 `&` 转义前处理 |
 | Markdown `\*` 转义星号破坏 LaTeX | 预处理 `\*`/`\**`/`\***` 再做格式替换 |
 
 ---

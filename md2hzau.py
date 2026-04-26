@@ -144,8 +144,8 @@ def patch_preamble(preamble: str, info: dict) -> str:
     # (d) Inject extra packages needed for tables
     preamble = _replace(preamble,
         r"\usepackage{booktabs}",
-        r"\usepackage{booktabs}" + "\n" + r"\usepackage{longtable,array,multirow}",
-        "inject longtable/array/multirow")
+        r"\usepackage{booktabs}" + "\n" + r"\usepackage{array,multirow,adjustbox}",
+        "inject array/multirow/adjustbox")
 
     # (e) Disable \sectionbreak (= \clearpage in original).
     #     We instead inject \clearpage manually before each \section in the body.
@@ -178,29 +178,17 @@ def patch_preamble(preamble: str, info: dict) -> str:
     for old, new in personal:
         preamble = _replace(preamble, old, new, old[:40])
 
-    # (h) Override tocloft's \@cftmaketoctitle to remove \addpenalty\@secpenalty.
-    #     That penalty (= -300, "welcome page break here") on an otherwise-empty
-    #     page causes LaTeX to push the entire TOC block to the next page, leaving
-    #     a blank page III. Removing it lets LaTeX keep the TOC on the same page.
-    preamble += r"""
-% md2hzau: remove \addpenalty\@secpenalty from tocloft \@cftmaketoctitle
-% to prevent a blank page before the table of contents.
-\makeatletter
-\renewcommand{\@cftmaketoctitle}{%
-  \if@cfthaschapter
-    \vspace*{\cftbeforetoctitleskip}%
-  \else
-    \vspace{\cftbeforetoctitleskip}%
-  \fi
-  \@cftpagestyle
-  {\interlinepenalty\@M
-  {\cfttoctitlefont\contentsname}{\cftaftertoctitle}%
-  \cftmarktoc
-  \par\nobreak
-  \vskip \cftaftertoctitleskip
-  \@afterheading}}
-\makeatother
-"""
+    # (h) HZAUtex template loads both titletoc and tocloft. These two packages
+    #     both rewrite \contentsline and conflict: all TOC entries get crammed
+    #     into a single 1000+pt unbreakable vbox, showing only one page of TOC.
+    #     Fix: disable tocloft so titletoc (designed to pair with titlesec) runs alone.
+    #     Blank-page-III is already fixed from the Python side (no \clearpage before
+    #     \tableofcontents), so tocloft's \@cftmaketoctitle patch is no longer needed.
+    preamble = _replace(preamble,
+        r"\usepackage{tocloft}",
+        r"%\usepackage{tocloft}  % disabled: conflicts with titletoc (→ 1000pt vbox overflow)",
+        "comment out tocloft (conflicts with titletoc → TOC single-page truncation)")
+
     print()
     return preamble
 
@@ -224,6 +212,9 @@ def cell_escape(s: str) -> str:
 
 
 def inline_fmt(s: str) -> str:
+    # hspaceNem → \hspace{Nem}  (algorithm pseudo-code indentation markers)
+    s = re.sub(r"hspace(\d+)em", r"\\hspace{\1em}", s)
+
     # Pre-process Markdown backslash-escaped stars (\*, \**, \***).
     # Must process longest-first to avoid partial substitution.
     # Markdown \* means a literal * (also valid in LaTeX body text).
@@ -236,7 +227,12 @@ def inline_fmt(s: str) -> str:
         if p.startswith("$"):
             out.append(p)
         else:
-            out.append(p.replace("&", r"\&").replace("%", r"\%"))
+            # HTML entities MUST be processed before & is escaped to \&
+            # (otherwise &emsp; becomes \&emsp; which is not a valid LaTeX command)
+            p = p.replace("&emsp;", r"\hspace{1em}").replace("&emsp", r"\hspace{1em}")
+            p = p.replace("&nbsp;", "~")
+            p = p.replace("&", r"\&").replace("%", r"\%")
+            out.append(p)
     s = "".join(out)
 
     s = re.sub(r"\*\*(.+?)\*\*", r"\\textbf{\1}", s)
@@ -286,18 +282,27 @@ def convert_table(table_lines: list) -> str:
     if not rows:
         return ""
     ncols = len(rows[0])
-    tex = [r"\begin{longtable}{" + "|".join(["l"] * ncols) + "}", r"\toprule"]
-    tex.append(" & ".join(
+    col_fmt = "|".join(["l"] * ncols)
+    inner = [r"\begin{tabular}{" + col_fmt + "}", r"\toprule"]
+    inner.append(" & ".join(
         r"\textbf{" + cell_escape(inline_fmt(c.strip("*"))) + "}"
         for c in rows[0]
     ) + r" \\")
-    tex += [r"\midrule", r"\endhead"]
+    inner.append(r"\midrule")
     for row in rows[1:]:
         while len(row) < ncols:
             row.append("")
-        tex.append(" & ".join(cell_escape(inline_fmt(c)) for c in row) + r" \\")
-    tex += [r"\bottomrule", r"\end{longtable}"]
-    return "\n".join(tex)
+        inner.append(" & ".join(cell_escape(inline_fmt(c)) for c in row) + r" \\")
+    inner += [r"\bottomrule", r"\end{tabular}"]
+    # adjustbox: max width=\linewidth → shrink wide tables to fit, never enlarge narrow ones
+    return "\n".join([
+        r"\begin{table}[H]",
+        r"\centering",
+        r"\begin{adjustbox}{max width=\linewidth}",
+    ] + inner + [
+        r"\end{adjustbox}",
+        r"\end{table}",
+    ])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -343,6 +348,7 @@ def convert_body(lines: list, img_prefix: str) -> list:
     table_lines = []
     i = 0
     body_started = False
+    page_reset_done = False  # page counter reset fires exactly once, at first \section
 
     while i < len(lines):
         stripped = lines[i].strip()
@@ -358,6 +364,24 @@ def convert_body(lines: list, img_prefix: str) -> list:
                 output.append(r"\end{thebibliography}")
                 in_biblio = False
             i += 1; continue
+
+        # Code blocks: ```latex → pass through verbatim; other langs → \verbatim
+        if stripped.startswith("```"):
+            lang = stripped[3:].strip().lower()
+            i += 1
+            block = []
+            while i < len(lines):
+                if lines[i].strip().startswith("```"):
+                    i += 1; break
+                block.append(lines[i])
+                i += 1
+            if lang == "latex":
+                output.extend(block)
+            else:
+                output.append(r"\begin{verbatim}")
+                output.extend(block)
+                output.append(r"\end{verbatim}")
+            continue
 
         m = re.match(r"^(#{2,4})\s+(.+)$", stripped)
         if m:
@@ -382,9 +406,15 @@ def convert_body(lines: list, img_prefix: str) -> list:
             cmds = {2: "section", 3: "subsection", 4: "subsubsection"}
             cmd = cmds.get(level, "paragraph")
             lbl = re.sub(r"[^\w]", "-", raw)[:40]
-            # \sectionbreak is disabled; manually clearpage before each \section
+            # \sectionbreak is disabled; manually clearpage before each \section.
+            # First \section also resets page counter to Arabic "1" (not here at TOC
+            # time, to avoid the TOC's second page being stamped with Arabic "1").
             if cmd == "section":
                 output.append(r"\clearpage")
+                if not page_reset_done:
+                    output.append(r"\setcounter{page}{1}")
+                    output.append(r"\renewcommand{\thepage}{\arabic{page}}")
+                    page_reset_done = True
             output.append(f"\\{cmd}{{{clean}}}\\label{{{lbl}}}")
             i += 1; continue
 
@@ -543,15 +573,12 @@ def main():
     out += [l + "\n" for l in en_text if l]
     out += [r"\end{enabstract}", ""]
 
-    # \tableofcontents without a preceding \clearpage:
-    # tocloft's internal penalty mechanism will start the TOC on a new page by
-    # itself. Adding an explicit \clearpage first creates a blank page III
-    # (LaTeX pushes the entire TOC block to the next page on an empty page).
-    out += [r"\tableofcontents",
-            r"\thispagestyle{main}",
-            r"\clearpage",
-            r"\setcounter{page}{1}",
-            r"\renewcommand{\thepage}{\arabic{page}}", "",
+    # \tableofcontents without a preceding \clearpage.
+    # titletoc (paired with titlesec) handles multi-page TOC with natural page breaks.
+    # Page counter reset (→ Arabic "1") happens at the first \section in convert_body,
+    # NOT here — resetting immediately after \tableofcontents would stamp the TOC's
+    # second page with Arabic "1", making it look like the start of main content.
+    out += [r"\tableofcontents", "",
             r"\seccontent", ""]
 
     out.extend(convert_body(lines, args.img_prefix))
