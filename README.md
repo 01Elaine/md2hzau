@@ -84,8 +84,8 @@ python md2hzau.py 论文.md `
 
 ```powershell
 cd HZAUtex/HZAUthesis
-xelatex 论文_hzau.tex
-xelatex 论文_hzau.tex   # 第二次编译修正交叉引用
+xelatex -interaction=nonstopmode 论文_hzau.tex
+xelatex -interaction=nonstopmode 论文_hzau.tex   # 第二次编译修正交叉引用
 ```
 
 ---

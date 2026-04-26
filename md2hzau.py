@@ -588,7 +588,7 @@ def main():
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(result, encoding="utf-8")
     print(f"Done → {dst}  ({len(result.splitlines())} lines)")
-    print(f"Compile with: xelatex {dst.name}  (run twice for cross-refs)")
+    print(f"Compile with: xelatex -interaction=nonstopmode {dst.name}  (run twice for cross-refs)")
 
 
 if __name__ == "__main__":
