@@ -1,7 +1,5 @@
 # md2hzau
 
-**写好一个 MD 文件，运行一条命令，直接得到毕业论文 PDF。**
-
 将 Markdown 论文一键转换为[华中农业大学本科毕业论文 LaTeX 模板（HZAUtex）](https://gitee.com/wagaaa/HZAUtex)格式。
 
 Convert a Markdown thesis to the [HZAU undergraduate thesis LaTeX template](https://gitee.com/wagaaa/HZAUtex) with a single command — no manual editing required.
