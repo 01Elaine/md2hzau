@@ -1,29 +1,23 @@
 #!/usr/bin/env python3
 """
-md2hzau — Markdown → 华中农业大学本科毕业论文 LaTeX 模板（HZAUtex）
+md2hzau — Markdown → 华中农业大学本科毕业论文 LaTeX
 
-核心宗旨：用户只写一个 MD 文件（按照模板格式，在 frontmatter 里填好个人信息），
-         运行一条命令，直接生成可编译的 LaTeX 文件，不需要再做任何其他修改。
+对接模板: https://github.com/eriche2016/HZAU_UnderGraduateThesis_Template
 
 用法:
-    python md2hzau.py 论文.md --template path/to/HZAUthesis/HZAUthesis.tex
+    python md2hzau.py 论文.md [--template template/main.tex] [--img-prefix Fig/]
 
-MD 文件格式（在文件头写 YAML frontmatter）:
-    ---
-    title: 论文题目
-    author: 姓名
-    school: 院系
-    class_num: 专业班级
-    student_id: 学号
-    instructor: 导师姓名 副教授
-    date: 2026年6月
-    year: 2026
-    ---
+输出:
+    template/<stem>_main.tex   — patch 好个人信息/摘要/致谢的主文件
+    template/chapters/content.tex — 所有正文章节
 
-    ## 摘要
-    ...（见 example/example.md）
+MD frontmatter 字段（在文件头 --- 块里填写）:
+    title_cn / title_en / author / author_en
+    major / major_en / instructor / instructor_en
+    instructor_title / instructor_title_en
+    student_id / class_name / degree
+    date_cn / date_en / signature_date / year
 
-HZAUtex 模板: https://gitee.com/wagaaa/HZAUtex
 License: MIT
 """
 
@@ -33,169 +27,67 @@ import sys
 from pathlib import Path
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1. CLI
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── 1. CLI ──────────────────────────────────────────────────────────────────
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Convert Markdown thesis to HZAU LaTeX template (no extra edits needed)"
+        description="Convert Markdown thesis to HZAU LaTeX template"
     )
-    p.add_argument("md", help="Markdown source file (.md)")
-    p.add_argument("--template", required=True,
-                   help="Path to HZAUthesis.tex (from gitee.com/wagaaa/HZAUtex)")
+    p.add_argument("md", help="Markdown source (.md)")
+    p.add_argument("--template", default="template/main.tex",
+                   help="Path to template main.tex (default: template/main.tex)")
     p.add_argument("--output",
-                   help="Output .tex file (default: <input_stem>_hzau.tex beside --template)")
-    p.add_argument("--img-prefix", default="./",
-                   help="Image path prefix in LaTeX, relative to output .tex (default: ./)",
-                   dest="img_prefix")
+                   help="Output main .tex path (default: <template_dir>/<stem>_main.tex)")
+    p.add_argument("--img-prefix", default="Fig/", dest="img_prefix",
+                   help="Image prefix in LaTeX relative to template dir (default: Fig/)")
     return p.parse_args()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. Frontmatter parsing (no external deps)
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── 2. Frontmatter ──────────────────────────────────────────────────────────
 
 _FM_DEFAULTS = {
-    "title":      "论文题目",
-    "author":     "学生姓名",
-    "school":     "学院",
-    "class_num":  "专业XXXX班",
-    "student_id": "000000000000",
-    "instructor": "导师姓名 副教授",
-    "date":       "2026年6月",
-    "year":       "2026",
+    "title_cn":            "论文中文题目",
+    "title_en":            "English Title of the Thesis",
+    "author":              "张三",
+    "author_en":           "ZHANGSAN",
+    "major":               "人工智能",
+    "major_en":            "ARTIFICIAL INTELLIGENCE",
+    "instructor":          "李四",
+    "instructor_en":       "SI LI",
+    "instructor_title":    "副教授",
+    "instructor_title_en": "ASSOCIATE PROFESSOR",
+    "student_id":          "2022317220XX",
+    "class_name":          "专业2201班",
+    "degree":              "工学学士学位",
+    "date_cn":             "二〇二五年六月",
+    "date_en":             "JUNE，2025",
+    "signature_date":      "2025年6月14日",
+    "year":                "2025",
 }
 
+
 def parse_frontmatter(text: str):
-    """
-    Extract YAML-like frontmatter from Markdown.
-    Returns (info_dict, remaining_markdown_text).
-    Frontmatter must be between two '---' lines at the top of the file.
-    """
     lines = text.splitlines()
     info = dict(_FM_DEFAULTS)
-
     if not lines or lines[0].strip() != "---":
         return info, text
-
     end = None
     for i, line in enumerate(lines[1:], 1):
         if line.strip() == "---":
             end = i
             break
-
     if end is None:
         return info, text
-
     for line in lines[1:end]:
         if ":" in line:
             key, _, val = line.partition(":")
-            key = key.strip()
-            val = val.strip()
+            key, val = key.strip(), val.strip()
             if key and val:
                 info[key] = val
-
     return info, "\n".join(lines[end + 1:])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. Preamble patching — read original HZAUthesis.tex, replace only what must change
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _replace(text: str, old: str, new: str, label: str) -> str:
-    if old not in text:
-        print(f"  WARNING: [{label}] not found, skipped", file=sys.stderr)
-        return text
-    print(f"  OK  [{label}]")
-    return text.replace(old, new, 1)
-
-
-def patch_preamble(preamble: str, info: dict) -> str:
-    print("Patching preamble ...")
-    year = info.get("year", "2026")
-
-    # (a) Header year: detect original year and replace
-    for y in range(2018, 2031):
-        marker = f"{y}\\hspace{{0.5em}}届"
-        if marker in preamble:
-            preamble = _replace(preamble, marker,
-                                f"{year}\\hspace{{0.5em}}届",
-                                f"页眉年份 {y}→{year}")
-            break
-    else:
-        print("  WARNING: [页眉年份] not found", file=sys.stderr)
-
-    # (b) Fix English font in Abstract: SimSun → Times New Roman
-    #     Original template sets \setmainfont{SimSun}, making ASCII chars
-    #     in Abstract render with SimSun's monospaced-looking glyphs.
-    #     CJK fonts are independently controlled by xeCJK — this change is safe.
-    preamble = _replace(preamble,
-        r"\setmainfont{SimSun}",
-        r"\setmainfont{Times New Roman}",
-        "mainfont → Times New Roman (fix Abstract English font)")
-
-    # (c) natbib: numeric citation style [1][2]...
-    preamble = _replace(preamble,
-        r"\usepackage{natbib}",
-        r"\usepackage[numbers,sort&compress]{natbib}",
-        "natbib → numbers,sort&compress")
-
-    # (d) Inject extra packages needed for tables
-    preamble = _replace(preamble,
-        r"\usepackage{booktabs}",
-        r"\usepackage{booktabs}" + "\n" + r"\usepackage{array,multirow,adjustbox}",
-        "inject array/multirow/adjustbox")
-
-    # (e) Disable \sectionbreak (= \clearpage in original).
-    #     We instead inject \clearpage manually before each \section in the body.
-    #     This prevents \tableofcontents (which calls \section* internally) from
-    #     triggering an unwanted page break that creates a blank TOC page.
-    preamble = _replace(preamble,
-        r"\newcommand{\sectionbreak}{\clearpage}",
-        r"\newcommand{\sectionbreak}{}",
-        "disable sectionbreak (moved to Python body-converter)")
-
-    # (f) Remove trailing \clearpage from enabstract.
-    #     The original ends with \clearpage inside the environment. When combined
-    #     with \tableofcontents (which itself has page-break penalty logic), this
-    #     caused a blank page III. We let \tableofcontents handle its own paging.
-    preamble = _replace(preamble,
-        "\\enkeyword}\n\t\\clearpage\n}",
-        "\\enkeyword}\n}",
-        "remove enabstract trailing clearpage (fixes blank page III)")
-
-    # (g) Personal information
-    personal = [
-        (r"\title{毕业论文题目}",          f"\\title{{{info['title']}}}"),
-        (r"\def\school{生命科学技术学院}",  f"\\def\\school{{{info['school']}}}"),
-        (r"\def\classnum{生命科学1901班}",  f"\\def\\classnum{{{info['class_num']}}}"),
-        (r"\author{学生姓名}",             f"\\author{{{info['author']}}}"),
-        (r"\def\stunum{2019305190201}",    f"\\def\\stunum{{{info['student_id']}}}"),
-        (r"\def\instructor{导师姓名}",     f"\\def\\instructor{{{info['instructor']}}}"),
-        (r"\date{\today}",                 f"\\date{{{info['date']}}}"),
-    ]
-    for old, new in personal:
-        preamble = _replace(preamble, old, new, old[:40])
-
-    # (h) HZAUtex template loads both titletoc and tocloft. These two packages
-    #     both rewrite \contentsline and conflict: all TOC entries get crammed
-    #     into a single 1000+pt unbreakable vbox, showing only one page of TOC.
-    #     Fix: disable tocloft so titletoc (designed to pair with titlesec) runs alone.
-    #     Blank-page-III is already fixed from the Python side (no \clearpage before
-    #     \tableofcontents), so tocloft's \@cftmaketoctitle patch is no longer needed.
-    preamble = _replace(preamble,
-        r"\usepackage{tocloft}",
-        r"%\usepackage{tocloft}  % disabled: conflicts with titletoc (→ 1000pt vbox overflow)",
-        "comment out tocloft (conflicts with titletoc → TOC single-page truncation)")
-
-    print()
-    return preamble
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. Inline formatting helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── 3. Inline formatting ────────────────────────────────────────────────────
 
 def cell_escape(s: str) -> str:
     parts = re.split(r"(\$[^$]*\$)", s)
@@ -204,40 +96,29 @@ def cell_escape(s: str) -> str:
         if p.startswith("$"):
             out.append(p)
         else:
-            p = p.replace("±", r"$\pm$").replace("≤", r"$\leq$") \
-                 .replace("≥", r"$\geq$").replace("→", r"$\rightarrow$") \
-                 .replace("✓", r"\checkmark{}").replace("✗", r"$\times$")
+            p = (p.replace("±", r"$\pm$").replace("≤", r"$\leq$")
+                  .replace("≥", r"$\geq$").replace("→", r"$\rightarrow$")
+                  .replace("✓", r"\checkmark{}").replace("✗", r"$\times$"))
             out.append(p)
     return "".join(out)
 
 
 def inline_fmt(s: str) -> str:
-    # hspaceNem → \hspace{Nem}  (algorithm pseudo-code indentation markers)
     s = re.sub(r"hspace(\d+)em", r"\\hspace{\1em}", s)
-
-    # Pre-process Markdown backslash-escaped stars (\*, \**, \***).
-    # Must process longest-first to avoid partial substitution.
-    # Markdown \* means a literal * (also valid in LaTeX body text).
     _S3, _S2, _S1 = "\x00S3\x00", "\x00S2\x00", "\x00S1\x00"
     s = s.replace("\\***", _S3).replace("\\**", _S2).replace("\\*", _S1)
-
     parts = re.split(r"(\$[^$\n]*\$)", s)
     out = []
     for p in parts:
         if p.startswith("$"):
             out.append(p)
         else:
-            # HTML entities MUST be processed before & is escaped to \&
-            # (otherwise &emsp; becomes \&emsp; which is not a valid LaTeX command)
             p = p.replace("&emsp;", r"\hspace{1em}").replace("&emsp", r"\hspace{1em}")
             p = p.replace("&nbsp;", "~")
             p = p.replace("&", r"\&").replace("%", r"\%")
             out.append(p)
     s = "".join(out)
-
     s = re.sub(r"\*\*(.+?)\*\*", r"\\textbf{\1}", s)
-    # Italic: only when * directly touches text (no space after opening *).
-    # This prevents significance markers like "p<0.05*" from triggering italic.
     s = re.sub(r"\*(?!\*|\s)(.+?)(?<!\s)\*(?!\*)", r"\\textit{\1}", s)
     s = re.sub(r"`([^`]+)`", r"\\texttt{\1}", s)
 
@@ -259,7 +140,7 @@ def inline_fmt(s: str) -> str:
 
 
 def process_refs(s: str) -> str:
-    """Convert [1], [2,3] → \\cite{ref1}, \\cite{ref2,ref3}."""
+    """[1], [2,3] → \\cite{ref1}, \\cite{ref2,ref3}"""
     def repl(m):
         nums = [n.strip() for n in m.group(1).split(",")]
         if len(nums) == 2 and "0" in nums:
@@ -294,7 +175,6 @@ def convert_table(table_lines: list) -> str:
             row.append("")
         inner.append(" & ".join(cell_escape(inline_fmt(c)) for c in row) + r" \\")
     inner += [r"\bottomrule", r"\end{tabular}"]
-    # adjustbox: max width=\linewidth → shrink wide tables to fit, never enlarge narrow ones
     return "\n".join([
         r"\begin{table}[H]",
         r"\centering",
@@ -305,9 +185,7 @@ def convert_table(table_lines: list) -> str:
     ])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. Abstract extraction
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── 4. Content extraction ────────────────────────────────────────────────────
 
 def extract_abstracts(lines: list):
     cn_text, cn_kw = [], ""
@@ -319,7 +197,7 @@ def extract_abstracts(lines: list):
             in_cn = True; continue
         if s == "## Abstract":
             in_cn = False; in_en = True; continue
-        if re.match(r"^## [^摘A]", s):
+        if re.match(r"^## ", s) and s not in ("## 摘要", "## Abstract"):
             in_cn = in_en = False; continue
         if in_cn:
             if s.startswith("**关键词"):
@@ -338,35 +216,163 @@ def extract_abstracts(lines: list):
     return cn_text, cn_kw, en_text, en_kw
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 6. Body conversion (state machine)
-# ─────────────────────────────────────────────────────────────────────────────
+def extract_acknowledgement(lines: list) -> list:
+    ack = []
+    in_ack = False
+    for l in lines:
+        s = l.strip()
+        if s == "## 致谢":
+            in_ack = True; continue
+        if in_ack:
+            if re.match(r"^## ", s):
+                break
+            ack.append(inline_fmt(s) if s else "")
+    return ack
+
+
+# ─── 5. Patch main.tex ────────────────────────────────────────────────────────
+
+def _replace_cmd(text: str, cmd: str, val: str) -> str:
+    marker = '\\newcommand{\\' + cmd + '}{'
+    idx = text.find(marker)
+    if idx == -1:
+        print(f"  WARNING: \\{cmd} not found in template", file=sys.stderr)
+        return text
+    start = idx + len(marker)
+    end = text.find('}', start)
+    if end == -1:
+        print(f"  WARNING: \\{cmd} closing brace not found", file=sys.stderr)
+        return text
+    new_text = text[:idx] + '\\newcommand{\\' + cmd + '}{' + val + text[end:]
+    print(f"  OK  [\\{cmd}]")
+    return new_text
+
+
+def patch_main_tex(text: str, info: dict,
+                   cn_text: list, cn_kw: str,
+                   en_text: list, en_kw: str,
+                   ack_text: list) -> str:
+    print("Patching main.tex ...")
+
+    # 个人信息命令
+    for cmd, key in [
+        ("thesisTitleC",    "title_cn"),
+        ("thesisTitleE",    "title_en"),
+        ("yourMajor",       "major"),
+        ("yourMajorEn",     "major_en"),
+        ("yourName",        "author"),
+        ("yourNameEn",      "author_en"),
+        ("yourMentor",      "instructor"),
+        ("yourMentorEn",    "instructor_en"),
+        ("Mentorjob",       "instructor_title"),
+        ("MentorjobEn",     "instructor_title_en"),
+        ("studentID",       "student_id"),
+        ("yourDateC",       "date_cn"),
+        ("yourDateEn",      "date_en"),
+        ("yourClass",       "class_name"),
+        ("yourDegree",      "degree"),
+        ("signatureDate",   "signature_date"),
+    ]:
+        text = _replace_cmd(text, cmd, info[key])
+
+    # 页眉年份
+    year = info["year"]
+    text = re.sub(r'华中农业大学\d+届学士学位毕业论文',
+                  f'华中农业大学{year}届学士学位毕业论文', text)
+    print(f"  OK  [页眉年份 → {year}届]")
+
+    # biblatex → 数字引用风格（中文毕设惯例）
+    text = re.sub(
+        r"style=gb7714-2015ay,citestyle=authoryear,\s*bibstyle=numeric,\s*backend=biber",
+        "style=gb7714-2015,citestyle=numeric,bibstyle=numeric,backend=biber",
+        text, count=1
+    )
+    print("  OK  [biblatex → numeric]")
+
+    # 注入正文所需宏包（若未存在）
+    if r"\usepackage{adjustbox}" not in text:
+        text = text.replace(
+            r"\usepackage{multirow}",
+            r"\usepackage{multirow}" + "\n"
+            + r"\usepackage{booktabs,array,adjustbox,float,enumitem}",
+            1
+        )
+        print("  OK  [inject booktabs/adjustbox/float/enumitem]")
+
+    # 中文摘要
+    cn_body = "\n\n".join(l for l in cn_text if l) or "请填写中文摘要。"
+    new_cn = (
+        "\\begin{abstract}\n\n"
+        + cn_body + "\n\n"
+        + f"\\keywords{{{cn_kw or '关键词1；关键词2'}}}\n\n"
+        + "\\end{abstract}"
+    )
+    text = re.sub(r"\\begin\{abstract\}.*?\\end\{abstract\}",
+                  lambda _: new_cn, text, flags=re.DOTALL, count=1)
+    print("  OK  [中文摘要]")
+
+    # 英文摘要
+    en_body = "\n\n".join(l for l in en_text if l) or "Please add English abstract here."
+    new_en = (
+        "\\begin{abstractEN}\n"
+        "\\addcontentsline{toc}{section}{Abstract}\n\n"
+        + en_body + "\n\n"
+        + f"\\keywordsEN{{{en_kw or 'keyword1; keyword2'}}}\n\n"
+        + "\\end{abstractEN}"
+    )
+    text = re.sub(r"\\begin\{abstractEN\}.*?\\end\{abstractEN\}",
+                  lambda _: new_en, text, flags=re.DOTALL, count=1)
+    print("  OK  [英文摘要]")
+
+    # 章节 \input 块 → 单一 chapters/content
+    text = re.sub(
+        r"(?:\\input\{chapters/chapter\d+\}\s*\\clearpage\s*\n)+",
+        lambda _: "\\input{chapters/content} \\clearpage\n\n",
+        text
+    )
+    print("  OK  [章节 \\input → chapters/content]")
+
+    # 致谢内容
+    if ack_text:
+        ack_body = "\n\n".join(l for l in ack_text if l)
+        date_simple = re.sub(r"[，,]", " ", info.get("date_en", "June, 2025")).title()
+        new_ack = (
+            "\\acknowledgement\n\n"
+            + ack_body + "\n\n"
+            + f"\\hfill {date_simple}\n\n"
+            + f"\\hfill {info['author']}\n\n\n"
+        )
+        text = re.sub(r"\\acknowledgement.*?(?=\\end\{document\})",
+                      lambda _: new_ack, text, flags=re.DOTALL, count=1)
+        print("  OK  [致谢]")
+
+    print()
+    return text
+
+
+# ─── 6. Body conversion ──────────────────────────────────────────────────────
+
+_SKIP_H2 = {"摘要", "Abstract", "致谢", "参考文献"}
+
 
 def convert_body(lines: list, img_prefix: str) -> list:
     output = []
-    in_biblio = in_thankpage = in_table = False
+    in_body = False
+    in_skip = False
+    in_table = False
     table_lines = []
     i = 0
-    body_started = False
-    page_reset_done = False  # page counter reset fires exactly once, at first \section
 
     while i < len(lines):
         stripped = lines[i].strip()
 
-        if not body_started:
-            if re.match(r"^## [第1]", stripped):
-                body_started = True
-            else:
-                i += 1; continue
-
-        if stripped == "---":
-            if in_biblio:
-                output.append(r"\end{thebibliography}")
-                in_biblio = False
-            i += 1; continue
-
-        # Code blocks: ```latex → pass through verbatim; other langs → \verbatim
+        # 代码块（in_skip 时直接跳过）
         if stripped.startswith("```"):
+            if not in_body or in_skip:
+                i += 1
+                while i < len(lines) and not lines[i].strip().startswith("```"):
+                    i += 1
+                i += 1; continue
             lang = stripped[3:].strip().lower()
             i += 1
             block = []
@@ -383,52 +389,39 @@ def convert_body(lines: list, img_prefix: str) -> list:
                 output.append(r"\end{verbatim}")
             continue
 
+        # 标题
         m = re.match(r"^(#{2,4})\s+(.+)$", stripped)
         if m:
-            if in_biblio:
-                output.append(r"\end{thebibliography}")
-                in_biblio = False
             level = len(m.group(1))
             raw = m.group(2)
-            title = process_refs(inline_fmt(raw))
-            if "参考文献" in title:
-                output.append(r"\begin{thebibliography}{99}")
-                in_biblio = True; i += 1; continue
-            if "致谢" in title:
-                output.append(r"\begin{thankpage}")
-                in_thankpage = True; i += 1; continue
-
-            # Strip chapter/section number prefix to avoid double-numbering
-            # e.g. "第1章 绪论" → "绪论",  "1.1 研究背景" → "研究背景"
             clean = re.sub(r"^第\d+章\s*", "", raw)
             clean = re.sub(r"^\d[\d\.]*[\s　]+", "", clean)
-            clean = process_refs(inline_fmt(clean))
+
+            if level == 2 and clean in _SKIP_H2:
+                in_skip = True
+                i += 1; continue
+
+            if level == 2:
+                in_skip = False
+                in_body = True
+
+            if in_skip:
+                i += 1; continue
+
+            title = process_refs(inline_fmt(clean))
             cmds = {2: "section", 3: "subsection", 4: "subsubsection"}
             cmd = cmds.get(level, "paragraph")
             lbl = re.sub(r"[^\w]", "-", raw)[:40]
-            # \sectionbreak is disabled; manually clearpage before each \section.
-            # First \section also resets page counter to Arabic "1" (not here at TOC
-            # time, to avoid the TOC's second page being stamped with Arabic "1").
-            if cmd == "section":
-                output.append(r"\clearpage")
-                if not page_reset_done:
-                    output.append(r"\setcounter{page}{1}")
-                    output.append(r"\renewcommand{\thepage}{\arabic{page}}")
-                    page_reset_done = True
-            output.append(f"\\{cmd}{{{clean}}}\\label{{{lbl}}}")
+            output.append(f"\\{cmd}{{{title}}}\\label{{{lbl}}}")
             i += 1; continue
 
-        if in_biblio:
-            if not stripped:
-                i += 1; continue
-            m_ref = re.match(r"^\[(\d+)\]\s+(.+)$", stripped)
-            if m_ref:
-                output.append(f"\\bibitem{{ref{m_ref.group(1)}}} {inline_fmt(m_ref.group(2))}")
-                i += 1; continue
-            output.append(r"\end{thebibliography}")
-            in_biblio = False; i += 1; continue
+        if in_skip or not in_body:
+            i += 1; continue
 
-        # Table
+        if stripped == "":
+            output.append(""); i += 1; continue
+
+        # 表格
         if stripped.startswith("|"):
             if not in_table:
                 in_table = True; table_lines = [stripped]
@@ -441,7 +434,7 @@ def convert_body(lines: list, img_prefix: str) -> list:
                 in_table = False; table_lines = []
             continue
 
-        # Figure
+        # 图片
         m_img = re.match(r"!\[([^\]]*)\]\(([^)]+)\)", stripped)
         if m_img:
             alt = m_img.group(1)
@@ -454,27 +447,33 @@ def convert_body(lines: list, img_prefix: str) -> list:
                     cap = m_cap.group(1) + " " + inline_fmt(m_cap.group(2))
                     i += 1
             lbl = "fig:" + re.sub(r"[^\w]", "-", alt)[:30]
-            output += [r"\begin{figure}[H]", r"  \centering",
-                       f"  \\includegraphics[width=0.88\\textwidth]{{{img_prefix}{fname}}}",
-                       f"  \\caption{{{cap}}}", f"  \\label{{{lbl}}}", r"\end{figure}"]
+            output += [
+                r"\begin{figure}[H]", r"  \centering",
+                f"  \\includegraphics[width=0.88\\textwidth]{{{img_prefix}{fname}}}",
+                f"  \\caption{{{cap}}}", f"  \\label{{{lbl}}}",
+                r"\end{figure}",
+            ]
             i += 1; continue
 
+        # 图说明行（已被上面消耗，这里防漏）
         if re.match(r"^\*\*图\d", stripped):
             i += 1; continue
 
+        # 表标题
         m_tbl_cap = re.match(r"^\*\*(表[\d\.\-]+)\s*(.*?)\*\*", stripped)
         if m_tbl_cap:
             output.append(r"\noindent\textbf{" + m_tbl_cap.group(1) + " " +
                            inline_fmt(m_tbl_cap.group(2)) + "}")
-            output.append("")
-            i += 1; continue
+            output.append(""); i += 1; continue
 
-        # Numbered list （1）（2）
+        # 数字列表 （1）（2）
         m_enum = re.match(r"^[（(](\d+)[）)]\s*(.+)$", stripped)
         if m_enum:
             items = []
             while i < len(lines):
                 l = lines[i].strip()
+                if not l:
+                    i += 1; continue
                 mm = re.match(r"^[（(](\d+)[）)]\s*(.+)$", l)
                 if mm:
                     items.append(inline_fmt(mm.group(2))); i += 1
@@ -485,12 +484,14 @@ def convert_body(lines: list, img_prefix: str) -> list:
             output.append(r"\end{enumerate}")
             continue
 
-        # Bullet list
+        # 无序列表
         m_bullet = re.match(r"^[-*]\s+(.+)$", stripped)
         if m_bullet:
             items = []
             while i < len(lines):
                 l = lines[i].strip()
+                if not l:
+                    i += 1; continue
                 mm = re.match(r"^[-*]\s+(.+)$", l)
                 if mm:
                     items.append(inline_fmt(mm.group(1))); i += 1
@@ -501,22 +502,13 @@ def convert_body(lines: list, img_prefix: str) -> list:
             output.append(r"\end{itemize}")
             continue
 
-        if stripped == "":
-            output.append(""); i += 1; continue
-
         output.append(process_refs(inline_fmt(stripped)) + "\n")
         i += 1
 
-    if in_thankpage:
-        output.append(r"\end{thankpage}")
-    if in_biblio:
-        output.append(r"\end{thebibliography}")
     return output
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 7. Post-processing
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── 7. Post-processing ───────────────────────────────────────────────────────
 
 def post_process(result: str) -> str:
     result = re.sub(r"\$\$([^$]+?)\$\$",
@@ -528,9 +520,7 @@ def post_process(result: str) -> str:
     return result
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 8. Entry point
-# ─────────────────────────────────────────────────────────────────────────────
+# ─── 8. Entry point ──────────────────────────────────────────────────────────
 
 def main():
     args = parse_args()
@@ -542,53 +532,34 @@ def main():
     if not tpl.exists():
         sys.exit(f"ERROR: template {tpl} not found")
 
-    dst = Path(args.output) if args.output else tpl.parent / (src.stem + "_hzau.tex")
+    tpl_dir = tpl.parent
+    dst_main = Path(args.output) if args.output else tpl_dir / (src.stem + "_main.tex")
+    dst_content = tpl_dir / "chapters" / "content.tex"
 
     raw = src.read_text(encoding="utf-8")
     info, md_body = parse_frontmatter(raw)
     lines = md_body.splitlines()
 
-    template_text = tpl.read_text(encoding="utf-8")
-    _BEGIN = r"\begin{document}"
-    if _BEGIN not in template_text:
-        sys.exit(f"ERROR: {_BEGIN!r} not found in template")
-    preamble = patch_preamble(template_text[:template_text.index(_BEGIN)], info)
-
     cn_text, cn_kw, en_text, en_kw = extract_abstracts(lines)
-    year = info.get("year", "2026")
+    ack_text = extract_acknowledgement(lines)
 
-    out = [preamble, _BEGIN, "",
-           r"\maketitle", "",
-           r"\setcounter{page}{1}",
-           r"\renewcommand{\thepage}{\Roman{page}}",
-           r"\makestatement{2}{" + year + "}", ""]
+    template_text = tpl.read_text(encoding="utf-8")
+    patched = patch_main_tex(template_text, info, cn_text, cn_kw, en_text, en_kw, ack_text)
 
-    out += [r"\setcounter{page}{1}",
-            r"\renewcommand{\thepage}{\Roman{page}}",
-            r"\begin{cnabstract}{" + cn_kw + "}"]
-    out += [l + "\n" for l in cn_text if l]
-    out += [r"\end{cnabstract}", ""]
+    body_lines = convert_body(lines, args.img_prefix)
+    body_text = post_process("\n".join(body_lines))
 
-    out += [r"\begin{enabstract}{" + en_kw + "}"]
-    out += [l + "\n" for l in en_text if l]
-    out += [r"\end{enabstract}", ""]
+    dst_main.write_text(patched, encoding="utf-8")
+    dst_content.parent.mkdir(parents=True, exist_ok=True)
+    dst_content.write_text(body_text, encoding="utf-8")
 
-    # \tableofcontents without a preceding \clearpage.
-    # titletoc (paired with titlesec) handles multi-page TOC with natural page breaks.
-    # Page counter reset (→ Arabic "1") happens at the first \section in convert_body,
-    # NOT here — resetting immediately after \tableofcontents would stamp the TOC's
-    # second page with Arabic "1", making it look like the start of main content.
-    out += [r"\tableofcontents", "",
-            r"\seccontent", ""]
-
-    out.extend(convert_body(lines, args.img_prefix))
-    out.append(r"\end{document}")
-
-    result = post_process("\n".join(out))
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.write_text(result, encoding="utf-8")
-    print(f"Done → {dst}  ({len(result.splitlines())} lines)")
-    print(f"Compile with: xelatex -interaction=nonstopmode {dst.name}  (run twice for cross-refs)")
+    print(f"Done:")
+    print(f"  main  → {dst_main}  ({len(patched.splitlines())} lines)")
+    print(f"  body  → {dst_content}  ({len(body_text.splitlines())} lines)")
+    print(f"\nCompile (in template/ directory):")
+    print(f"  cd {tpl_dir}")
+    print(f"  latexmk {dst_main.name}")
+    print(f"  # or: xelatex {dst_main.name}  (run twice for cross-refs)")
 
 
 if __name__ == "__main__":
