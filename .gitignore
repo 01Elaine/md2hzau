@@ -1,4 +1,6 @@
 # LaTeX build artifacts
+*.bcf
+*.run.xml
 *.aux
 *.log
 *.out
