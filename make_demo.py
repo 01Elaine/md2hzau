@@ -1,34 +1,26 @@
-"""Compose the README demo image."""
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+"""Compose the README demo image: Typora screenshot → HZAU PDF cover side-by-side."""
+from PIL import Image, ImageDraw, ImageFont
 import pathlib
 
 FIGURES = pathlib.Path(__file__).parent / "figures"
 OUT     = pathlib.Path(__file__).parent / "docs" / "demo.png"
 
-# ── palette ────────────────────────────────────────────────────────────────
-BG_TOP    = (235, 239, 246)
-BG_BOT    = (220, 226, 237)
-BLUE      = (41, 98, 220)
-BLUE_PILL = (219, 231, 255)
-LABEL_FG  = (90, 100, 118)
-WHITE     = (255, 255, 255)
-BORDER    = (200, 205, 215)
-
-# ── layout ─────────────────────────────────────────────────────────────────
-TARGET_H  = 760   # final panel height
-PADDING   = 56    # outer margin
-GAP       = 170   # arrow zone width
-FOOT_H    = 42    # label area below panels
-CORNER    = 8
+TARGET_H = 820
+PADDING  = 48
+GAP      = 160
+LABEL_H  = 48
+BG       = (248, 249, 250)
+BLUE     = (52, 120, 246)
+BLUE_PILL= (225, 235, 255)
+LABEL_FG = (80, 80, 90)
+SHADOW_C = (210, 213, 218)
+CORNER   = 6
 
 
-def load_crop_scale(path, target_h, crop_bottom_frac=1.0):
+def load_scaled(path, h):
     img = Image.open(path).convert("RGBA")
-    w, h = img.size
-    crop_h = int(h * crop_bottom_frac)
-    img = img.crop((0, 0, w, crop_h))
-    scale = target_h / crop_h
-    return img.resize((round(w * scale), target_h), Image.LANCZOS)
+    w0, h0 = img.size
+    return img.resize((round(w0 * h / h0), h), Image.LANCZOS)
 
 
 def find_font(size, bold=False):
@@ -44,117 +36,94 @@ def find_font(size, bold=False):
     return ImageFont.load_default()
 
 
-def soft_shadow(canvas, box, radius=CORNER, blur=18, strength=55):
+def draw_shadow(draw, box, shadow=SHADOW_C):
     x0, y0, x1, y1 = box
-    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ImageDraw.Draw(layer).rounded_rectangle(
-        [x0+5, y0+7, x1+5, y1+7], radius=radius, fill=(0, 0, 0, strength))
-    canvas.alpha_composite(layer.filter(ImageFilter.GaussianBlur(blur)))
+    draw.rounded_rectangle([x0+4, y0+6, x1+4, y1+6], radius=CORNER, fill=shadow)
 
 
-def paste_rounded(canvas, img, xy, radius=CORNER):
+def paste_rounded(canvas, panel, xy, radius=CORNER):
     x, y = xy
-    w, h = img.size
+    w, h = panel.size
     mask = Image.new("L", (w, h), 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, w-1, h-1], radius=radius, fill=255)
-    canvas.paste(img.convert("RGBA"), (x, y), mask)
+    canvas.paste(panel.convert("RGBA"), (x, y), mask)
 
 
-def draw_arrow_badge(draw, cx, cy, font):
-    # shaft
-    arm = 52
-    draw.rounded_rectangle(
-        [cx-arm, cy-7, cx+arm, cy+7], radius=7, fill=BLUE)
-    # head
-    draw.polygon([cx+arm, cy-19, cx+arm+22, cy, cx+arm, cy+19], fill=BLUE)
-
-    # badge below
-    cmd = "python md2hzau.py"
-    bb  = draw.textbbox((0, 0), cmd, font=font)
-    tw, th = bb[2]-bb[0], bb[3]-bb[1]
-    px, py2 = 11, 6
-    bx0 = cx - tw//2 - px
-    bx1 = cx + tw//2 + px
-    by0 = cy + 30
-    by1 = by0 + th + py2*2
-    draw.rounded_rectangle([bx0, by0, bx1, by1], radius=6,
-                            fill=BLUE_PILL, outline=BLUE, width=2)
-    draw.text((bx0+px, by0+py2), cmd, font=font, fill=BLUE)
+def draw_arrow(draw, cx, cy):
+    arm, arm_h = 70, 12
+    hw, hh = 28, 36
+    x0 = cx - arm//2 - hw//2
+    x1 = cx + arm//2 - hw//2
+    draw.rounded_rectangle([x0, cy-arm_h//2, x1, cy+arm_h//2], radius=arm_h//2, fill=BLUE)
+    draw.polygon([x1, cy-hh//2, x1+hw, cy, x1, cy+hh//2], fill=BLUE)
 
 
 def main():
-    # Crop Typora screenshot to top 55% so height ratio matches A4 cover better
-    left  = load_crop_scale(FIGURES / "example_md.png",      TARGET_H, 0.55)
-    right = load_crop_scale(FIGURES / "example_hzau_01.png", TARGET_H, 1.00)
+    left  = load_scaled(FIGURES / "example_md.png",      TARGET_H)
+    right = load_scaled(FIGURES / "example_hzau_01.png", TARGET_H)
 
     lw, rw = left.width, right.width
     canvas_w = PADDING + lw + GAP + rw + PADDING
-    canvas_h = PADDING + TARGET_H + FOOT_H + PADDING
+    canvas_h = PADDING + LABEL_H + TARGET_H + PADDING
 
-    # ── gradient background ────────────────────────────────────────────────
-    base = Image.new("RGBA", (canvas_w, canvas_h))
-    for y in range(canvas_h):
-        t = y / canvas_h
-        r = int(BG_TOP[0] + (BG_BOT[0]-BG_TOP[0]) * t)
-        g = int(BG_TOP[1] + (BG_BOT[1]-BG_TOP[1]) * t)
-        b = int(BG_TOP[2] + (BG_BOT[2]-BG_TOP[2]) * t)
-        ImageDraw.Draw(base).line([(0, y), (canvas_w, y)], fill=(r, g, b, 255))
+    canvas = Image.new("RGB", (canvas_w, canvas_h), BG)
+    draw   = ImageDraw.Draw(canvas)
+
+    font_label = find_font(22, bold=True)
+    font_cmd   = find_font(18)
+    font_tip   = find_font(15)
 
     lx = PADDING
     rx = PADDING + lw + GAP
-    py = PADDING
+    iy = PADDING + LABEL_H
 
-    # ── shadows ────────────────────────────────────────────────────────────
-    soft_shadow(base, [lx, py, lx+lw, py+TARGET_H])
-    soft_shadow(base, [rx, py, rx+rw, py+TARGET_H])
+    # shadows
+    draw_shadow(draw, [lx, iy, lx+lw, iy+TARGET_H])
+    draw_shadow(draw, [rx, iy, rx+rw, iy+TARGET_H])
 
-    # ── white panel backgrounds ────────────────────────────────────────────
-    wl = Image.new("RGBA", base.size, (0,0,0,0))
-    ImageDraw.Draw(wl).rounded_rectangle(
-        [lx, py, lx+lw, py+TARGET_H], radius=CORNER, fill=(255,255,255,255))
-    ImageDraw.Draw(wl).rounded_rectangle(
-        [rx, py, rx+rw, py+TARGET_H], radius=CORNER, fill=(255,255,255,255))
-    base.alpha_composite(wl)
+    # white panel bg
+    draw.rounded_rectangle([lx, iy, lx+lw, iy+TARGET_H], radius=CORNER, fill=(255,255,255))
+    draw.rounded_rectangle([rx, iy, rx+rw, iy+TARGET_H], radius=CORNER, fill=(255,255,255))
 
-    # ── paste screenshots ──────────────────────────────────────────────────
-    paste_rounded(base, left,  (lx, py))
-    paste_rounded(base, right, (rx, py))
+    # screenshots
+    paste_rounded(canvas, left,  (lx, iy))
+    paste_rounded(canvas, right, (rx, iy))
 
-    # ── thin border ────────────────────────────────────────────────────────
-    bl = Image.new("RGBA", base.size, (0,0,0,0))
-    ImageDraw.Draw(bl).rounded_rectangle(
-        [lx, py, lx+lw, py+TARGET_H], radius=CORNER,
-        outline=(*BORDER, 180), width=1)
-    ImageDraw.Draw(bl).rounded_rectangle(
-        [rx, py, rx+rw, py+TARGET_H], radius=CORNER,
-        outline=(*BORDER, 180), width=1)
-    base.alpha_composite(bl)
+    # borders
+    draw.rounded_rectangle([lx, iy, lx+lw, iy+TARGET_H], radius=CORNER, outline=(200,202,206), width=1)
+    draw.rounded_rectangle([rx, iy, rx+rw, iy+TARGET_H], radius=CORNER, outline=(200,202,206), width=1)
 
-    # ── flatten to RGB for drawing text / arrow ────────────────────────────
-    rgb = Image.new("RGB", base.size, WHITE)
-    rgb.paste(base.convert("RGB"))
-
-    draw = ImageDraw.Draw(rgb)
-    font_label = find_font(19, bold=False)
-    font_cmd   = find_font(16, bold=False)
-
-    arrow_cx = PADDING + lw + GAP // 2
-    arrow_cy = py + TARGET_H // 2
-
-    draw_arrow_badge(draw, arrow_cx, arrow_cy, font_cmd)
-
-    # ── labels below panels ────────────────────────────────────────────────
-    def foot_label(text, x, w):
+    # labels above panels
+    def label(text, x, w):
         bb = draw.textbbox((0,0), text, font=font_label)
         tw = bb[2]-bb[0]
-        draw.text((x + (w-tw)//2, py + TARGET_H + 12),
-                  text, font=font_label, fill=LABEL_FG)
+        draw.text((x+(w-tw)//2, PADDING+(LABEL_H-22)//2), text, font=font_label, fill=LABEL_FG)
 
-    foot_label("Markdown 源文件", lx, lw)
-    foot_label("华农毕设 PDF", rx, rw)
+    label("Markdown 源文件", lx, lw)
+    label("华农毕设 PDF",    rx, rw)
+
+    # arrow
+    arrow_cx = PADDING + lw + GAP // 2
+    arrow_cy = iy + TARGET_H // 2
+    draw_arrow(draw, arrow_cx, arrow_cy)
+
+    # "一键转换" tip
+    tip = "一键转换"
+    bb = draw.textbbox((0,0), tip, font=font_tip)
+    draw.text((arrow_cx-(bb[2]-bb[0])//2, arrow_cy-48), tip, font=font_tip, fill=(150,160,175))
+
+    # badge
+    cmd = "python md2hzau.py"
+    bb  = draw.textbbox((0,0), cmd, font=font_cmd)
+    tw, th = bb[2]-bb[0], bb[3]-bb[1]
+    px = 10
+    bx0, bx1 = arrow_cx-tw//2-px, arrow_cx+tw//2+px
+    by0 = arrow_cy + 32
+    draw.rounded_rectangle([bx0, by0, bx1, by0+th+px], radius=6, fill=BLUE_PILL, outline=BLUE, width=1)
+    draw.text((bx0+px, by0+px//2), cmd, font=font_cmd, fill=BLUE)
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    rgb.save(OUT, "PNG", optimize=True)
+    canvas.save(OUT, "PNG", optimize=True)
     print(f"Saved → {OUT}  ({canvas_w}×{canvas_h}px, {OUT.stat().st_size//1024} KB)")
 
 
