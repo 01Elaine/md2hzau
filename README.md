@@ -11,10 +11,13 @@ Convert a Markdown thesis to the [HZAU undergraduate thesis LaTeX template](http
 ## 推荐工作流 Recommended Workflow
 
 ```
-实验日志 / 代码注释 / 数据结果
+git clone https://github.com/01Elaine/md2hzau   ← 先 clone 本项目
           ↓
-   本地 AI 起草初稿（Ollama、LM Studio 等本地部署模型）
-   提示词示例："根据以下实验记录，按华农毕设格式写第3章方法部分，输出 Markdown"
+   参考 example.md 了解 MD 格式规范
+          ↓
+   AI 工具起草初稿（推荐 Claude Code 或 Codex）
+   提示词示例："根据以下实验记录，参考 example.md 的格式，
+               写第3章方法部分，输出符合 md2hzau 规范的 Markdown"
           ↓
    Typora 修改润色（人机通读的中间格式）
    — 补充导师意见、调整逻辑、插入图表引用
