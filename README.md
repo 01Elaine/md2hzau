@@ -4,6 +4,8 @@
 
 Convert a Markdown thesis to the [HZAU undergraduate thesis LaTeX template](https://gitee.com/wagaaa/HZAUtex) with a single command — no manual editing required.
 
+![demo](docs/demo.png)
+
 ---
 
 ## 快速开始 Quick Start
