@@ -8,6 +8,33 @@ Convert a Markdown thesis to the [HZAU undergraduate thesis LaTeX template](http
 
 ---
 
+## 推荐工作流 Recommended Workflow
+
+```
+实验日志 / 代码注释 / 数据结果
+          ↓
+   本地 AI 起草初稿（Ollama、LM Studio 等本地部署模型）
+   提示词示例："根据以下实验记录，按华农毕设格式写第3章方法部分，输出 Markdown"
+          ↓
+   Typora 修改润色（人机通读的中间格式）
+   — 补充导师意见、调整逻辑、插入图表引用
+          ↓
+   python md2hzau.py 论文.md   ← 本项目
+          ↓
+   latexmk 编译 → 论文.pdf
+          ↓（可选）
+   上传 template/ 目录到 Overleaf，在线微调格式细节
+```
+
+**为什么选 Markdown 作为中间格式？**
+- AI 输出 Markdown 比直接输出 LaTeX 更稳定、错误更少
+- Typora 渲染效果接近最终排版，适合人工审阅和修改
+- `.md` 文件易于版本管理，diff 可读，方便与导师协作
+
+**Overleaf 上传方式：** 将 `template/` 目录下的所有文件打包上传，在菜单中选择 XeLaTeX 编译器即可。如编译超时，可先注释掉 `\printbibliography`，编译一次后再取消注释重新编译。
+
+---
+
 ## 快速开始 Quick Start
 
 ### 第一步：准备 MD 文件
