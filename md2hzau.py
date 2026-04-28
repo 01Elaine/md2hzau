@@ -480,6 +480,10 @@ def convert_body(lines: list, img_prefix: str) -> list:
         if stripped == "":
             output.append(""); i += 1; continue
 
+        # 水平分隔线 --- 忽略（LaTeX 章节已有视觉分隔，无需转成 em-dash）
+        if re.match(r"^-{3,}$", stripped):
+            i += 1; continue
+
         # 表格
         if stripped.startswith("|"):
             if not in_table:
@@ -612,7 +616,7 @@ def convert_body(lines: list, img_prefix: str) -> list:
             output.append(r"\end{itemize}")
             continue
 
-        output.append(process_refs(inline_fmt(stripped)) + "\n")
+        output.append(process_refs(inline_fmt(stripped)))
         i += 1
 
     return output
