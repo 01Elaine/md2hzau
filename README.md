@@ -260,9 +260,10 @@ $$
 
 ## 已知限制
 
-- 图片宽度固定为 `0.88\textwidth`
+- 图片宽度固定为 `0.88\textwidth`（单图），子图宽度按数量自动分配
 - 不支持多层嵌套列表（只支持单层 `- item` 和 `（1）item`）
 - 签名图片（`Fig/author_signature.png`、`Fig/mentor_signature.png`）需自行提供
+- **不支持跨页长表格（longtable）**：如需续表，请在生成的 `.tex` 文件中手动将对应 `table` 环境改为 `longtable`，参考 `template/chapters/chapter4.tex` 中的注释示例
 
 ---
 

@@ -1,26 +1,31 @@
 %使用XeLaTex或者LualaLaTex编译
 
-\documentclass[UTF8,AutoFakeBold=1,AutoFakeSlant,zihao=-4]{HZAU}
+\documentclass[UTF8,twoside,AutoFakeBold=1,AutoFakeSlant,zihao=-4]{HZAU}
 \usepackage{graphicx} % 用于插入图片
 \usepackage{setspace} % 用于设置行距
-\usepackage{ctex} % 支持中文字体和字号设置
 \usepackage{color}
 \usepackage{xcolor}
 \usepackage[absolute, overlay]{textpos}
 \usepackage{tcolorbox} % 用于创建带边框的盒子
 \usepackage{fancyhdr}
 \tcbuselibrary{skins} % 加载 skins 库以获得更多样式选项
-\usepackage{multirow}
 
-\usepackage[style=gb7714-2015ay,citestyle=authoryear, bibstyle=numeric, backend=biber]{biblatex}
+% 【参考文献排序提醒】规范§7.5要求"中文文献在前、外文文献在后"。
+% 如需自动实现此顺序，请为每条中文bib条目添加 langid = {chinese}，
+% 然后在下方 biblatex 选项中加入 sorting=none 并手动维护顺序；
+% 或者将中文文献统一放在 .bib 文件开头、设置 sorting=none。
+\usepackage[style=gb7714-2015ay, backend=biber]{biblatex}
 \DeclareDelimFormat{nameyeardelim}{\addspace}  % 去掉作者-年份间的逗号
 % 取消标题的引号
 \DeclareFieldFormat[article,inproceedings,incollection,unpublished]{title}{#1}
 \addbibresource{references.bib}  % 替换为你的 .bib 文件名
 % 自定义参考文献标题格式（居中+目录）
-\defbibheading{bibliography}[\centering \heiti \zihao{4} 参考文献]{
-  \section*{#1}  % 居中不编号的标题
-  \addcontentsline{toc}{section}{参考文献}  % 添加到目录
+\defbibheading{bibliography}[参考文献]{%
+  \clearpage\phantomsection
+  \addcontentsline{toc}{section}{参考文献}%
+  \vspace*{-10pt}%
+  \makebox[\textwidth][c]{\heiti\zihao{3}参\hspace{1em}考\hspace{1em}文\hspace{1em}献}\par%
+  \vspace{8pt}%
 }
 
 
@@ -38,11 +43,10 @@
 % 设置表格中英文标题格式
 \captionsetup[table][bi-first]{name=表} % 中文"表"代替"Table"
 \captionsetup[table][bi-second]{name=Table}
+% 设置 longtable 中英文标题格式
+\captionsetup[longtable][bi-first]{name=表}
+\captionsetup[longtable][bi-second]{name=Table}
 
-% 让 figure 编号按 section 分级（格式：Figure 1-1, 1-2, ...）
-\numberwithin{figure}{section}
-\numberwithin{table}{section}
-\numberwithin{equation}{section} 
 
 %%%%%%%%%%%%%%%请在这里填写你的论文题目
 \newcommand{\thesisTitleC}{基于视觉大模型的开放集三维表征学习}
@@ -61,8 +65,9 @@
 \newcommand{\Mentorjob}{副教授}           %职称
 \newcommand{\MentorjobEn}{ASSOCIATE PROFESSOR}           %职称
 \newcommand{\studentID}{2022317220XX}   %学号
-\newcommand{\yourDateC}{二〇二五年六月}
+\newcommand{\yourDateC}{二〇二六年六月}
 \newcommand{\yourDateEn}{JUNE，2026}
+\newcommand{\gradYearNum}{2026}   % 届次年份（阿拉伯数字），用于偶数页页眉
 \newcommand{\yourClass}{人工智能2201}       
 \newcommand{\yourDegree}{工学学士学位}
 \newcommand{\signatureDate}{2026年6月14日}
@@ -103,7 +108,10 @@
 \vspace*{\fill}
 \newpage
 
-% 中文摘要
+% 目录（自动生成）——规范要求：目录在摘要之前
+\contentpage
+
+% 中文摘要（页码自动切换为小写罗马数字）
 \begin{abstract}
 
 请在这里填写你的中文摘要，建议字数在300-500字之间。摘要应简明扼要地介绍研究的背景、目的、方法、结果和结论。请勿包含图表、引用文献或过于专业的术语，以确保摘要的可读性和普适性。
@@ -113,9 +121,9 @@
 \end{abstract}
 
 \begin{abstractEN}
-%% add enligh abstract to table of contents
+%% add English abstract to table of contents
 \addcontentsline{toc}{section}{Abstract}
-%% must add a breaked line below to ensure the indent 
+%% must add a breaked line below to ensure the indent
 
 Please add your English abstract here.
 
@@ -124,31 +132,33 @@ Please add your English abstract here.
 
 \end{abstractEN}
 
-
-% 目录（自动生成）,不用修改
-\contentpage
-
+% 如需缩略语表（规范§6："如有必要"），取消下方注释并填写内容
+% \begin{abbreviations}
+%   \abbr{CNN}{Convolutional Neural Network，卷积神经网络}
+%   \abbr{LSTM}{Long Short-Term Memory，长短期记忆网络}
+% \end{abbreviations}
 
 %%% 设置页眉
 %%
 % 正文开始
 \pagestyle{fancy}
 % 正文从第一页开始计算页码
+\pagenumbering{arabic}
 \setcounter{page}{1}
 % 页眉和页脚（页码）的格式设定
 \fancyhf{}
-\fancyhead[C]{\fontsize{10.5pt}{10.5pt}\selectfont{华中农业大学2025届学士学位毕业论文}}
+\fancyhead[CO]{\fontsize{10.5pt}{10.5pt}\selectfont{\thesisTitleC}}
+\fancyhead[CE]{\fontsize{10.5pt}{10.5pt}\selectfont{华中农业大学\gradYearNum 届学士学位（毕业）论文}}
 \fancyfoot[C]{\fontsize{9pt}{9pt}\selectfont{\thepage}}
 \renewcommand{\headrulewidth}{1pt}
 \renewcommand{\footrulewidth}{0pt}
 
-% 正文 22 磅的行距，段前段后间距为 0
+% 段前段后间距为 0，行距与 cls 保持一致（linespread 1.5）
 \setlength{\parskip}{0em}
-\renewcommand{\baselinestretch}{1.53}
-% 正文首行悬挂 1.02cm
-\setlength{\parindent}{1.02cm}
+\setlength{\parindent}{2\ccwd}
 %%%%%%%%%%%%%%%%%%%以下是正文部分%%%%%%%%%%%%%%%%%%%%%%%
-
+% 【排版提醒】定稿前请通读 PDF，手动检查孤行（段落首行单独留在页底）
+% 和孤尾（段落末行单独落在下一页），通过微调措辞或断句消除。
 
 \input{chapters/chapter1} \clearpage
 
@@ -189,7 +199,7 @@ Please add your English abstract here.
 [Please add xxxx]。
 
 
-\hfill Jun, 2026 
+\hfill Jun, 2026
 
 \hfill 张三
 

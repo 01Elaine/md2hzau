@@ -21,13 +21,11 @@
   inner=3.2cm,outer=2.5cm,top=2.5cm,bottom=2.5cm,%页面设置：页边距上下左右各用2.5cm。
   headheight=1.5cm,   % 页眉高度
   headsep=0.5cm,      % 页眉与正文之间的距离
-  footskip=1.75cm,]{geometry}
-\setlength{\headsep}{0.6cm}
+  footskip=10mm,]{geometry}
 
 \RequirePackage{amsthm,amsmath,amssymb,indentfirst,booktabs,multicol,multirow,xcolor,graphicx,fancyhdr,hologo,array,hyperref}
 
 % 设置目录与引用的超链接（需要编译多次）
-\RequirePackage{hyperref}
 \hypersetup{
   pdfborder={0 0 0},
   colorlinks=false,linkcolor={blue},urlcolor={blue},filecolor={blue},citecolor={blue},
@@ -37,6 +35,7 @@
 %%%%%%%%%%%%%%%%%%%%%% 字体与段落 %%%%%%%%%%%%%%%%%%%%%%
 
 \PassOptionsToPackage{no-math}{fontspec}
+\PassOptionsToPackage{AutoFakeBold=3}{xeCJK}
 \RequirePackage[UTF8,scheme=plain]{ctex}
 \setmainfont{Times New Roman}       %西文字体默认
 
@@ -61,13 +60,17 @@
 \renewcommand\tablename{表}
 
 \RequirePackage{caption}
+\RequirePackage{longtable}
+\RequirePackage{subcaption}
 \DeclareCaptionLabelSeparator{onespace}{~~}
-\captionsetup[table]{skip=8pt,labelsep=onespace}
+\captionsetup[table]{skip=8pt,labelsep=onespace,justification=centering}
 \captionsetup[figure]{skip=8pt,labelsep=onespace}
+\captionsetup[longtable]{skip=8pt,labelsep=onespace,justification=centering}
 
 \renewcommand{\captionfont}{\songti\zihao{5}}
+\captionsetup[subfigure]{labelformat=simple,labelsep=space}
+\renewcommand{\thesubfigure}{(\alph{subfigure})}
 
-\usepackage{booktabs} % 用于美化表格
 \usepackage{float} % 用于控制表格位置
 % 设置表注格式
 \newcommand{\tablesource}[1]{%
@@ -76,13 +79,14 @@
 }
 
 % 设置图题格式
-\renewcommand{\figurename}{图} % 图编号前缀
-\DeclareCaptionLabelSeparator{onespace}{~~} % 图号与图题之间空1个字距
-% 设置图题格式
 \captionsetup[figure]{
-  labelsep=onespace, % 使用自定义分隔符 onespace
-  font=small, % 图题字体为小号
-  justification=centering % 图题居中
+  labelsep=onespace,
+  justification=centering
+}
+
+% \longtablecontinued{列数} —— 在 longtable 续页表头区块使用，输出"续表 N"
+\newcommand{\longtablecontinued}[1]{%
+  \multicolumn{#1}{l}{\songti\zihao{5}续表~\thetable}\\%
 }
 
 % 设置图注格式
@@ -94,6 +98,21 @@
 
 % 设置插图与正文之间的间距
 \setlength{\intextsep}{12pt} % 插图与正文之间上下各空一行
+
+%%%%%%%%%%%%%%%%%%%%%% 算法/伪代码 %%%%%%%%%%%%%%%%%%%%%%
+
+\RequirePackage[ruled,linesnumbered]{algorithm2e}
+% 中文化关键词
+\SetKwInput{KwIn}{输入}
+\SetKwInput{KwOut}{输出}
+\SetKwIF{If}{ElseIf}{Else}{if}{then}{else if}{else}{end if}
+\SetKwFor{For}{for}{do}{end for}
+\SetKwFor{While}{while}{do}{end while}
+\SetKw{Return}{return}
+\SetKw{Break}{break}
+% 标题字体与图表题一致（五号宋体）
+\SetAlCapFnt{\songti\zihao{5}}
+\SetAlCapNameFnt{\songti\zihao{5}}
 
 
 %%%%%%%%%%%%%%%%%%%%%% code style %%%%%%%%%%%%%%%%%%%%%%
@@ -142,7 +161,7 @@
     & & & \\ % 空行实现跨行
     \hline
     \multicolumn{4}{|c|}{\fontsize{14pt}{14pt}\selectfont\centering\textbf{独创性声明}} \\ % 新增标题行
-    \multicolumn{4}{|>{\linespread{1.5}\selectfont}p{\textwidth}|}{ % 设置1.5倍行距
+    \multicolumn{4}{|>{\linespread{1.5}\selectfont}p{\dimexpr\textwidth-2\tabcolsep-2\arrayrulewidth\relax}|}{ % 设置1.5倍行距
      \hspace{2\ccwd}
 本人声明所呈交的论文是我个人在导师指导下进行的研究工作及取得的研究成果。尽我所知，除了文中特别加以标注和致谢的地方外，论文中不包含其他人已经发表或撰写过的研究成果，也不包含为获得华中农业大学或其他教育机构的学位或证书而使用过的材料，指导教师对此进行了审定。与我一同工作的同志对本研究所做的任何贡献均已在论文中做了明确的说明，并表示了谢意。
     } \\
@@ -152,7 +171,7 @@
      \multicolumn{4}{|c|}{}  \\
     \hline
         \multicolumn{4}{|c|}{\fontsize{14pt}{14pt}\centering\textbf{学位论文使用授权书}} \\ % 新增标题行
-    \multicolumn{4}{|>{\linespread{1.5}\selectfont}p{\textwidth}|}{ % 设置1.5倍行距
+    \multicolumn{4}{|>{\linespread{1.5}\selectfont}p{\dimexpr\textwidth-2\tabcolsep-2\arrayrulewidth\relax}|}{ % 设置1.5倍行距
      \hspace{2\ccwd} \songti
 本人完全了解华中农业大学关于保存、使用学位论文的规定，即学生必须按照学校要求提交学位论文的印刷本和电子版本；学校有权保存提交论文的印刷版和电子版，并提供目录检索和阅览服务，可以采用影印、缩印或扫描等复制手段保存、汇编学位论文。本人同意华中农业大学可以用不同方式在不同媒体上发表、传播学位论文的全部或部分内容，为存在馆际合作关系的兄弟高校用户提供文献传递和交换服务，同时本人保留在其他媒体发表论文的权力。
 
@@ -177,6 +196,8 @@
 % 中文摘要命令
 \renewenvironment{abstract} {
 \clearpage \phantomsection
+\pagenumbering{roman}
+\setcounter{page}{1}
 \begin{center}
 \vspace*{-10pt}
     \zihao{3} \heiti 摘 \qquad 要 % 标题中间空4个字距
@@ -218,6 +239,29 @@
     \par\vspace{1cm} % 使用 \par 确保前一个段落结束，再加空距
     \noindent\textbf{Key words: } #1%
     \clearpage % 在关键词之后换页
+}
+
+%%%%%%%%%%%%%%%%%%%%%% 缩略语表 %%%%%%%%%%%%%%%%%%%%%%
+
+% \abbr{缩略语}{原文} —— 在 abbreviations 环境内使用，每行一条
+\newcommand{\abbr}[2]{%
+  \textbf{#1} & #2 \\[4pt]%
+}
+
+\newenvironment{abbreviations}{%
+  \clearpage\phantomsection
+  \addcontentsline{toc}{section}{缩略语表}
+  \begin{center}
+    \vspace*{-10pt}
+    \zihao{3}\heiti 缩\quad 略\quad 语\quad 表
+    \vspace{8pt}
+  \end{center}
+  \zihao{-4}
+  \noindent
+  \begin{tabular}{@{}p{3.5cm}p{\dimexpr\linewidth-3.5cm-2\tabcolsep\relax}@{}}
+}{%
+  \end{tabular}
+  \clearpage
 }
 
 %%%%%%%%%%%%%%%%%%%%%% 章节标题样式 %%%%%%%%%%%%%%%%%%%%%%
@@ -298,15 +342,13 @@
 
 
 \newcommand{\contentpage}{
+  \pagenumbering{Roman}
+  \setcounter{page}{1}
   \begin{spacing}{1.5}
     \tableofcontents
   \end{spacing}
 
   \clearpage
-
-
-  \pagenumbering{arabic}
-  \setcounter{page}{1}
 }
 
 \newcommand{\nonumsection}[1]{
@@ -550,7 +592,6 @@
 
 %%%%%%%%%%%%%%%%%%%%%% 编程语言语法高亮支持 %%%%%%%%%%%%%%%%%%%%%%
 
-\usepackage{color}
 \definecolor{lightgray}{rgb}{.9,.9,.9}
 \definecolor{darkgray}{rgb}{.4,.4,.4}
 \definecolor{purple}{rgb}{0.65, 0.12, 0.82}
@@ -621,7 +662,6 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%附录设定%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 定义附录格式
-\RequirePackage{hyperref}
 \renewcommand{\appendix}{%
   \par
   \setcounter{section}{0} % 重置章节计数器
@@ -656,19 +696,19 @@
   \renewcommand{\theequation}{\Alph{section}-\arabic{equation}}
 }
 
-  \vspace{-1cm}
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%致谢%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % 定义致谢内容格式
 \newenvironment{acknowledgement}{%
-  \clearpage\addcontentsline{toc}{section}{致\quad 谢} % 将“致谢”加入目录
-  \section*{致~~~~~~~~谢} % 添加致谢标题
-  \vspace{1em}
+  \clearpage\addcontentsline{toc}{section}{致\quad 谢}
+  \begin{center}
+    \vspace*{-10pt}
+    \zihao{3}\heiti 致\hspace{2em}谢
+    \vspace{8pt}
+  \end{center}
   \setlength{\parindent}{2em} % 首行缩进2字距
   \setstretch{1.5} % 1.5倍行距
   \zihao{-4} % 小四号
-  \setstretch{1.5} % 1.5倍行距
   \setlength{\parskip}{2pt} % 段落间距为 0
 
 
@@ -682,7 +722,7 @@
 % 设置脚注格式
 \usepackage{footmisc}
 \renewcommand{\footnotelayout}{%
-  \fontsize{9}{1}\selectfont % 小五号字体，行距为 11pt（单倍行距）
+  \fontsize{9}{11}\selectfont % 小五号字体，行距为 11pt（单倍行距）
   \setlength{\parindent}{0pt} % 无缩进
   \setlength{\parskip}{0pt} % 段前0行，段后0行
   \justifying % 两端对齐
@@ -690,3 +730,6 @@
 
 % 确保脚注全文连续编号
 \setcounter{footnote}{0} % 重置脚注计数器
+
+% 脚注标记格式：右上角"1）"（规范§8.2）
+\renewcommand{\thefootnote}{\arabic{footnote}）}

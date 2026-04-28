@@ -140,12 +140,12 @@ def inline_fmt(s: str) -> str:
 
 
 def process_refs(s: str) -> str:
-    """[1], [2,3] → \\cite{ref1}, \\cite{ref2,ref3}"""
+    """[1], [2,3] → \\parencite{ref1}, \\parencite{ref2,ref3}"""
     def repl(m):
         nums = [n.strip() for n in m.group(1).split(",")]
         if len(nums) == 2 and "0" in nums:
             return m.group(0)
-        return r"\cite{" + ",".join("ref" + n for n in nums) + "}"
+        return r"\parencite{" + ",".join("ref" + n for n in nums) + "}"
     parts = re.split(r"(\$[^$\n]*\$)", s)
     return "".join(
         p if p.startswith("$") else re.sub(r"\[(\d+(?:,\s*\d+)*)\]", repl, p)
@@ -153,7 +153,7 @@ def process_refs(s: str) -> str:
     )
 
 
-def convert_table(table_lines: list) -> str:
+def convert_table(table_lines: list, cap_cn: str = "", cap_en: str = "") -> str:
     rows = []
     for l in table_lines:
         l = l.strip()
@@ -175,14 +175,23 @@ def convert_table(table_lines: list) -> str:
             row.append("")
         inner.append(" & ".join(cell_escape(inline_fmt(c)) for c in row) + r" \\")
     inner += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join([
-        r"\begin{table}[H]",
-        r"\centering",
-        r"\begin{adjustbox}{max width=\linewidth}",
-    ] + inner + [
-        r"\end{adjustbox}",
-        r"\end{table}",
-    ])
+
+    cap_lines = []
+    if cap_cn:
+        en = cap_en if cap_en else cap_cn
+        lbl = "tab:" + re.sub(r"[^\w]", "-", cap_cn)[:30]
+        cap_lines = [
+            f"  \\bicaption{{{cap_cn}}}{{{en}}}",
+            f"  \\label{{{lbl}}}",
+        ]
+
+    return "\n".join(
+        [r"\begin{table}[H]", r"  \centering"]
+        + cap_lines
+        + [r"  \begin{adjustbox}{max width=\linewidth}"]
+        + ["  " + ln for ln in inner]
+        + [r"  \end{adjustbox}", r"\end{table}"]
+    )
 
 
 # ─── 4. Content extraction ────────────────────────────────────────────────────
@@ -214,6 +223,44 @@ def extract_abstracts(lines: list):
             elif s:
                 en_text.append(inline_fmt(s))
     return cn_text, cn_kw, en_text, en_kw
+
+
+def extract_bibliography(lines: list) -> str:
+    """## 参考文献 节下的 ```bibtex 块 → 原始 BibTeX 字符串（空字符串表示无内容）"""
+    in_ref = False
+    in_block = False
+    bib_lines = []
+    for l in lines:
+        s = l.strip()
+        if s == "## 参考文献":
+            in_ref = True; continue
+        if in_ref:
+            if re.match(r"^## ", s):
+                break
+            if not in_block and s.lower().startswith("```bibtex"):
+                in_block = True; continue
+            if in_block:
+                if s.startswith("```"):
+                    in_block = False; continue
+                bib_lines.append(l)
+    return "\n".join(bib_lines).strip()
+
+
+def extract_abbreviations(lines: list) -> list:
+    """## 缩略语 节下 '- ABBR: Full name' 行 → [(abbr, full), ...]"""
+    abbrs = []
+    in_abbr = False
+    for l in lines:
+        s = l.strip()
+        if s == "## 缩略语":
+            in_abbr = True; continue
+        if in_abbr:
+            if re.match(r"^## ", s):
+                break
+            m = re.match(r"^[-*]\s+([^:：]+)[：:]\s*(.+)$", s)
+            if m:
+                abbrs.append((m.group(1).strip(), m.group(2).strip()))
+    return abbrs
 
 
 def extract_acknowledgement(lines: list) -> list:
@@ -251,7 +298,8 @@ def _replace_cmd(text: str, cmd: str, val: str) -> str:
 def patch_main_tex(text: str, info: dict,
                    cn_text: list, cn_kw: str,
                    en_text: list, en_kw: str,
-                   ack_text: list) -> str:
+                   ack_text: list,
+                   abbrs: list = ()) -> str:
     print("Patching main.tex ...")
 
     # 个人信息命令
@@ -281,20 +329,13 @@ def patch_main_tex(text: str, info: dict,
                   f'华中农业大学{year}届学士学位毕业论文', text)
     print(f"  OK  [页眉年份 → {year}届]")
 
-    # biblatex → 数字引用风格（中文毕设惯例）
-    text = re.sub(
-        r"style=gb7714-2015ay,citestyle=authoryear,\s*bibstyle=numeric,\s*backend=biber",
-        "style=gb7714-2015,citestyle=numeric,bibstyle=numeric,backend=biber",
-        text, count=1
-    )
-    print("  OK  [biblatex → numeric]")
-
     # 注入正文所需宏包（若未存在）
     if r"\usepackage{adjustbox}" not in text:
         text = text.replace(
-            r"\usepackage{multirow}",
-            r"\usepackage{multirow}" + "\n"
-            + r"\usepackage{booktabs,array,adjustbox,float,enumitem}",
+            r"\usepackage{graphicx}",
+            r"\usepackage{graphicx}" + "\n"
+            + r"\usepackage{booktabs,array,adjustbox,float,enumitem}" + "\n"
+            + r"\setlength{\emergencystretch}{3em}",
             1
         )
         print("  OK  [inject booktabs/adjustbox/float/enumitem]")
@@ -324,6 +365,17 @@ def patch_main_tex(text: str, info: dict,
                   lambda _: new_en, text, flags=re.DOTALL, count=1)
     print("  OK  [英文摘要]")
 
+    # 缩略语表（仅在 MD 中有 ## 缩略语 节时注入）
+    if abbrs:
+        abbr_rows = "\n".join(f"  \\abbr{{{a}}}{{{b}}}" for a, b in abbrs)
+        new_abbr = "\\begin{abbreviations}\n" + abbr_rows + "\n\\end{abbreviations}"
+        text = re.sub(
+            r'% 如需缩略语表.*?% \\end\{abbreviations\}',
+            lambda _: new_abbr,
+            text, flags=re.DOTALL, count=1
+        )
+        print(f"  OK  [缩略语表 {len(abbrs)} 条]")
+
     # 章节 \input 块 → 单一 chapters/content
     text = re.sub(
         r"(?:\\input\{chapters/chapter\d+\}\s*\\clearpage\s*\n)+",
@@ -352,7 +404,7 @@ def patch_main_tex(text: str, info: dict,
 
 # ─── 6. Body conversion ──────────────────────────────────────────────────────
 
-_SKIP_H2 = {"摘要", "Abstract", "致谢", "参考文献"}
+_SKIP_H2 = {"摘要", "Abstract", "缩略语", "致谢", "参考文献"}
 
 
 def convert_body(lines: list, img_prefix: str) -> list:
@@ -361,6 +413,7 @@ def convert_body(lines: list, img_prefix: str) -> list:
     in_skip = False
     in_table = False
     table_lines = []
+    pending_table_cap = ("", "")
     i = 0
 
     while i < len(lines):
@@ -383,6 +436,10 @@ def convert_body(lines: list, img_prefix: str) -> list:
                 i += 1
             if lang == "latex":
                 output.extend(block)
+            elif lang == "algorithm":
+                output.append(r"\begin{algorithm}[H]")
+                output.extend(block)
+                output.append(r"\end{algorithm}")
             else:
                 output.append(r"\begin{verbatim}")
                 output.extend(block)
@@ -404,6 +461,8 @@ def convert_body(lines: list, img_prefix: str) -> list:
             if level == 2:
                 in_skip = False
                 in_body = True
+                if clean == "附录":
+                    output.append(r"\appendix")
 
             if in_skip:
                 i += 1; continue
@@ -430,41 +489,92 @@ def convert_body(lines: list, img_prefix: str) -> list:
             i += 1
             next_s = lines[i].strip() if i < len(lines) else ""
             if not next_s.startswith("|"):
-                output.append(convert_table(table_lines))
+                cap_cn, cap_en = pending_table_cap
+                output.append(convert_table(table_lines, cap_cn, cap_en))
+                pending_table_cap = ("", "")
                 in_table = False; table_lines = []
             continue
 
-        # 图片
+        # 图片（含子图：多张连续 ![...] 后跟 **图N** 触发 subfigure）
         m_img = re.match(r"!\[([^\]]*)\]\(([^)]+)\)", stripped)
         if m_img:
-            alt = m_img.group(1)
-            fname = Path(m_img.group(2)).name
-            cap = alt
-            if i + 1 < len(lines):
-                next_l = lines[i + 1].strip()
-                m_cap = re.match(r"^\*\*(图\d+[\.\d-]*)\*\*\s*(.*)", next_l)
+            # 收集连续图片行
+            imgs = [(m_img.group(1), Path(m_img.group(2)).name)]
+            j = i + 1
+            while j < len(lines):
+                ns = lines[j].strip()
+                mm = re.match(r"!\[([^\]]*)\]\(([^)]+)\)", ns)
+                if mm:
+                    imgs.append((mm.group(1), Path(mm.group(2)).name))
+                    j += 1
+                else:
+                    break
+            # 尝试读取 **图N** 标题行（支持 中文 | English 双语）
+            cap_cn_str, cap_en_str, lbl_base = None, None, None
+            if j < len(lines):
+                ns = lines[j].strip()
+                m_cap = re.match(r"^\*\*(图[\d\.\-]+)\*\*\s*(.*)", ns)
                 if m_cap:
-                    cap = m_cap.group(1) + " " + inline_fmt(m_cap.group(2))
-                    i += 1
-            lbl = "fig:" + re.sub(r"[^\w]", "-", alt)[:30]
-            output += [
-                r"\begin{figure}[H]", r"  \centering",
-                f"  \\includegraphics[width=0.88\\textwidth]{{{img_prefix}{fname}}}",
-                f"  \\caption{{{cap}}}", f"  \\label{{{lbl}}}",
-                r"\end{figure}",
-            ]
-            i += 1; continue
+                    num = m_cap.group(1)
+                    rest = inline_fmt(m_cap.group(2).strip()) if m_cap.group(2) else ""
+                    full = (num + (" " + rest if rest else "")).strip()
+                    if "|" in full:
+                        cn, _, en = full.partition("|")
+                        cap_cn_str, cap_en_str = cn.strip(), en.strip()
+                    else:
+                        cap_cn_str, cap_en_str = full, ""
+                    lbl_base = re.sub(r"[^\w]", "-", num)[:30]
+                    j += 1
+            if len(imgs) == 1:
+                alt, fname = imgs[0]
+                cap_cn = cap_cn_str or alt
+                cap_en = cap_en_str or alt
+                lbl = "fig:" + (lbl_base or re.sub(r"[^\w]", "-", alt)[:30])
+                output += [
+                    r"\begin{figure}[H]", r"  \centering",
+                    f"  \\includegraphics[width=0.88\\textwidth]{{{img_prefix}{fname}}}",
+                    f"  \\bicaption{{{cap_cn}}}{{{cap_en}}}",
+                    f"  \\label{{{lbl}}}",
+                    r"\end{figure}",
+                ]
+            else:
+                _sub_w = {2: "0.45", 3: "0.30", 4: "0.22"}
+                w = _sub_w.get(len(imgs), f"{0.9/len(imgs):.2f}")
+                cap_cn = cap_cn_str or "图题"
+                cap_en = cap_en_str or cap_cn
+                lbl = "fig:" + (lbl_base or "subfig")
+                blk = [r"\begin{figure}[H]", r"  \centering"]
+                for k, (alt, fname) in enumerate(imgs):
+                    blk += [
+                        f"  \\begin{{subfigure}}[b]{{{w}\\textwidth}}",
+                        r"    \centering",
+                        f"    \\includegraphics[width=\\textwidth]{{{img_prefix}{fname}}}",
+                        f"    \\caption{{{inline_fmt(alt)}}}",
+                        r"  \end{subfigure}",
+                    ]
+                    if k < len(imgs) - 1:
+                        blk.append(r"  \hfill")
+                blk += [f"  \\bicaption{{{cap_cn}}}{{{cap_en}}}", f"  \\label{{{lbl}}}", r"\end{figure}"]
+                output.extend(blk)
+            i = j
+            continue
 
         # 图说明行（已被上面消耗，这里防漏）
         if re.match(r"^\*\*图\d", stripped):
             i += 1; continue
 
-        # 表标题
-        m_tbl_cap = re.match(r"^\*\*(表[\d\.\-]+)\s*(.*?)\*\*", stripped)
+        # 表标题 → 暂存，随下一个表格一起输出（支持 中文 | English 双语）
+        m_tbl_cap = re.match(r"^\*\*(表[\d\.\-]+)\*\*\s*(.*)$", stripped)
         if m_tbl_cap:
-            output.append(r"\noindent\textbf{" + m_tbl_cap.group(1) + " " +
-                           inline_fmt(m_tbl_cap.group(2)) + "}")
-            output.append(""); i += 1; continue
+            num = m_tbl_cap.group(1)
+            rest = inline_fmt(m_tbl_cap.group(2).strip()) if m_tbl_cap.group(2) else ""
+            full = (num + (" " + rest if rest else "")).strip()
+            if "|" in full:
+                cn, _, en = full.partition("|")
+                pending_table_cap = (cn.strip(), en.strip())
+            else:
+                pending_table_cap = (full, "")
+            i += 1; continue
 
         # 数字列表 （1）（2）
         m_enum = re.match(r"^[（(](\d+)[）)]\s*(.+)$", stripped)
@@ -542,9 +652,15 @@ def main():
 
     cn_text, cn_kw, en_text, en_kw = extract_abstracts(lines)
     ack_text = extract_acknowledgement(lines)
+    abbrs = extract_abbreviations(lines)
+    bib_content = extract_bibliography(lines)
+    if bib_content:
+        bib_path = tpl_dir / "references.bib"
+        bib_path.write_text(bib_content, encoding="utf-8")
+        print(f"  OK  [references.bib → {bib_path}]")
 
     template_text = tpl.read_text(encoding="utf-8")
-    patched = patch_main_tex(template_text, info, cn_text, cn_kw, en_text, en_kw, ack_text)
+    patched = patch_main_tex(template_text, info, cn_text, cn_kw, en_text, en_kw, ack_text, abbrs)
 
     body_lines = convert_body(lines, args.img_prefix)
     body_text = post_process("\n".join(body_lines))
@@ -556,10 +672,13 @@ def main():
     print(f"Done:")
     print(f"  main  → {dst_main}  ({len(patched.splitlines())} lines)")
     print(f"  body  → {dst_content}  ({len(body_text.splitlines())} lines)")
+    stem = dst_main.stem
     print(f"\nCompile (in template/ directory):")
     print(f"  cd {tpl_dir}")
-    print(f"  latexmk {dst_main.name}")
-    print(f"  # or: xelatex {dst_main.name}  (run twice for cross-refs)")
+    print(f"  xelatex {dst_main.name}")
+    print(f"  biber {stem}")
+    print(f"  xelatex {dst_main.name}")
+    print(f"  xelatex {dst_main.name}")
 
 
 if __name__ == "__main__":

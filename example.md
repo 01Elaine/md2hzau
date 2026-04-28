@@ -34,6 +34,13 @@ Experimental results demonstrate that the multi-modal fusion strategy improves p
 
 **Keywords:** Fall Detection; Multi-Modal Fusion; Attention Mechanism; Skeleton Keypoints; Inertial Sensors
 
+## 缩略语
+
+- RGB: Red Green Blue
+- IMU: Inertial Measurement Unit
+- GCN: Graph Convolutional Network
+- LSTM: Long Short-Term Memory
+
 ## 第1章 绪论
 
 ### 1.1 研究背景与意义
@@ -94,12 +101,18 @@ $$
 
 如图所示，本文方法由三个特征提取分支和一个融合模块组成：
 
-![图3-1 整体框架图](figures/fig_architecture.png)
-**图3-1** 多模态跌倒检测整体框架
+![Overall Architecture of the Proposed Multi-Modal Fall Detection Method](figures/fig_architecture.png)
+**图3-1** 多模态跌倒检测整体框架 | Overall Architecture of the Proposed Method
 
 - RGB 分支：基于 ResNet-50 提取空间外观特征
 - 骨骼分支：基于图卷积网络（GCN）提取结构特征
 - IMU 分支：基于 LSTM 提取时序动态特征
+
+两路分支对比如子图所示：
+
+![RGB Feature Extraction Branch](figures/fig_architecture.png)
+![Skeleton Feature Extraction Branch](figures/fig_architecture.png)
+**图3-2** RGB 与骨骼特征提取分支对比 | Comparison of RGB and Skeleton Feature Extraction Branches
 
 ### 3.2 跨模态注意力融合
 
@@ -110,6 +123,21 @@ $$
 $$
 
 其中权重 $\{\alpha_i\}$ 由 Softmax 归一化的打分函数给出。
+
+跨模态注意力融合的具体流程见算法1：
+
+```algorithm
+\caption{跨模态注意力融合}
+\KwIn{三路特征 $\mathbf{f}_v, \mathbf{f}_s, \mathbf{f}_a$，投影矩阵 $\{\mathbf{W}_i\}$}
+\KwOut{融合特征 $\mathbf{f}_{fused}$}
+\For{$i \in \{v, s, a\}$}{
+  $\tilde{\mathbf{f}}_i \leftarrow \mathbf{W}_i \mathbf{f}_i$\tcp*{线性投影到公共空间}
+  $e_i \leftarrow \mathbf{w}^\top \tilde{\mathbf{f}}_i$\tcp*{打分}
+}
+$\{\alpha_i\} \leftarrow \mathrm{Softmax}(\{e_i\})$\;
+$\mathbf{f}_{fused} \leftarrow \sum_i \alpha_i \cdot \tilde{\mathbf{f}}_i$\;
+\Return{$\mathbf{f}_{fused}$}
+```
 
 ### 3.3 损失函数
 
@@ -127,7 +155,7 @@ $$
 
 ### 4.2 主要结果
 
-**表4-1** 在 UR Fall Detection 数据集上与基线方法的比较
+**表4-1** 在 UR Fall Detection 数据集上与基线方法的比较 | Comparison with Baselines on UR Fall Detection Dataset
 
 | 方法 | 精确率 | 召回率 | $F_1$ | 准确率 |
 |------|--------|--------|--------|--------|
@@ -142,7 +170,7 @@ $$
 
 为验证各模态的贡献，进行消融实验，结果如下：
 
-**表4-2** 消融实验结果
+**表4-2** 消融实验结果 | Ablation Study Results
 
 | 配置 | $F_1$ | $\Delta F_1$ |
 |------|--------|--------------|
@@ -170,6 +198,85 @@ $$
 - 引入轻量化网络结构，降低边缘设备部署成本
 - 扩展到多人场景的跌倒检测
 - 研究隐私保护条件下的视频分析方案
+
+## 参考文献
+
+```bibtex
+@article{ref1,
+  author  = {World Health Organization},
+  title   = {Falls},
+  year    = {2021},
+  url     = {https://www.who.int/news-room/fact-sheets/detail/falls}
+}
+
+@article{ref2,
+  author  = {Montero-Odasso, Manuel and others},
+  title   = {World guidelines for falls prevention and management for older adults},
+  journal = {Age and Ageing},
+  year    = {2022},
+  volume  = {51},
+  number  = {9}
+}
+
+@article{ref3,
+  author  = {Vishwakarma, Dinesh Kumar and Rawat, Priti and Kapoor, Rajkumar},
+  title   = {A review of background subtraction algorithms for video surveillance},
+  journal = {Multimedia Tools and Applications},
+  year    = {2013},
+  volume  = {67},
+  pages   = {1--29}
+}
+
+@article{ref4,
+  author  = {Casilari, Eduardo and Santoyo-Ram{\'o}n, Jos{\'e}-Antonio and Cano-Garc{\'i}a, Jos{\'e}-Manuel},
+  title   = {Analysis of public datasets for wearable fall detection systems},
+  journal = {Sensors},
+  year    = {2017},
+  volume  = {17},
+  number  = {7}
+}
+
+@inproceedings{ref5,
+  author    = {Cao, Zhe and Simon, Tomas and Wei, Shih-En and Sheikh, Yaser},
+  title     = {{OpenPose}: Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields},
+  booktitle = {CVPR},
+  year      = {2017}
+}
+
+@inproceedings{ref6,
+  author    = {Bahdanau, Dzmitry and Cho, Kyunghyun and Bengio, Yoshua},
+  title     = {Neural Machine Translation by Jointly Learning to Align and Translate},
+  booktitle = {ICLR},
+  year      = {2015}
+}
+
+@article{ref7,
+  author  = {Kwolek, Bogdan and Kepski, Michal},
+  title   = {Human fall detection on embedded platform using depth maps and wireless accelerometer},
+  journal = {Computer Methods and Programs in Biomedicine},
+  year    = {2014},
+  volume  = {117},
+  pages   = {489--501}
+}
+
+@inproceedings{ref8,
+  author    = {Adhikari, Karan and Bouchachia, Hamid and Nait-Charif, Hammadi},
+  title     = {Activity recognition for indoor fall detection using convolutional neural network},
+  booktitle = {VISAPP},
+  year      = {2017}
+}
+```
+
+## 附录
+
+### 主要实验环境配置
+
+| 配置项 | 参数 |
+|--------|------|
+| 操作系统 | Ubuntu 20.04 LTS |
+| GPU | NVIDIA RTX 3090 (24 GB) |
+| 深度学习框架 | PyTorch 1.13.1 |
+| Python 版本 | 3.9.7 |
 
 ## 致谢
 
