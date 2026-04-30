@@ -334,11 +334,11 @@ def patch_main_tex(text: str, info: dict,
         text = text.replace(
             r"\usepackage{graphicx}",
             r"\usepackage{graphicx}" + "\n"
-            + r"\usepackage{booktabs,array,adjustbox,float,enumitem}" + "\n"
+            + r"\usepackage{booktabs,array,adjustbox,float}" + "\n"
             + r"\setlength{\emergencystretch}{3em}",
             1
         )
-        print("  OK  [inject booktabs/adjustbox/float/enumitem]")
+        print("  OK  [inject booktabs/adjustbox/float]")
 
     # 中文摘要
     cn_body = "\n\n".join(l for l in cn_text if l) or "请填写中文摘要。"
@@ -411,6 +411,7 @@ def convert_body(lines: list, img_prefix: str) -> list:
     output = []
     in_body = False
     in_skip = False
+    in_appendix = False
     in_table = False
     table_lines = []
     pending_table_cap = ("", "")
@@ -462,14 +463,21 @@ def convert_body(lines: list, img_prefix: str) -> list:
                 in_skip = False
                 in_body = True
                 if clean == "附录":
+                    # 进入附录模式：标题层级 -1，每个 ### 成为独立的 \section（"附录 A xxx"）
                     output.append(r"\appendix")
+                    in_appendix = True
+                    i += 1; continue
 
             if in_skip:
                 i += 1; continue
 
             title = process_refs(inline_fmt(clean))
-            cmds = {2: "section", 3: "subsection", 4: "subsubsection"}
-            cmd = cmds.get(level, "paragraph")
+            if in_appendix:
+                cmds = {3: "section", 4: "subsection"}
+                cmd = cmds.get(level, "subsubsection")
+            else:
+                cmds = {2: "section", 3: "subsection", 4: "subsubsection"}
+                cmd = cmds.get(level, "paragraph")
             lbl = re.sub(r"[^\w]", "-", raw)[:40]
             output.append(f"\\{cmd}{{{title}}}\\label{{{lbl}}}")
             i += 1; continue
