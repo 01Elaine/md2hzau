@@ -355,8 +355,7 @@ def patch_main_tex(text: str, info: dict,
     # 英文摘要
     en_body = "\n\n".join(l for l in en_text if l) or "Please add English abstract here."
     new_en = (
-        "\\begin{abstractEN}\n"
-        "\\addcontentsline{toc}{section}{Abstract}\n\n"
+        "\\begin{abstractEN}\n\n"
         + en_body + "\n\n"
         + f"\\keywordsEN{{{en_kw or 'keyword1; keyword2'}}}\n\n"
         + "\\end{abstractEN}"
